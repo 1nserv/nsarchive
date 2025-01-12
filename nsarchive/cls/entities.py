@@ -1,9 +1,21 @@
 import time
+import typing
 
 from .exceptions import *
 from .base import NSID
 
 from .. import utils
+
+class Permission:
+    def __init__(self):
+        self.append = False
+        self.manage = False
+        self.edit = False
+        self.read = False
+
+    def merge(self, **permissions: bool) -> None:
+        for perm in permissions.items():
+            self.__setattr__(*perm)
 
 class PositionPermissions:
     """
@@ -11,26 +23,25 @@ class PositionPermissions:
     """
 
     def __init__(self) -> None:
-        # Membres
-        self.approve_laws = False # Approuver ou désapprouver les lois proposées (vaut aussi pour la Constitution)
-        self.buy_items = False # Acheter des items depuis le marketplace
-        self.create_organizations = False # Créer une organisation
-        self.edit_constitution = False # Proposer une modification de la Constitution
-        self.edit_laws = False # Proposer une modification des différents textes de loi
-        self.manage_entities = False # Gérer les membres et les organisations
-        self.manage_national_channel = False # Prendre la parole sur la chaîne nationale et avoir une priorité de passage sur les autres chaînes
-        self.manage_reports = False # Accepter ou refuser une plainte
-        self.manage_state_budgets = False # Gérer les différents budgets de l'État
-        self.moderate_members = False # Envoyer des membres en garde à vue, en détention ou toute autre sanction non présente sur le client Discord
-        self.propose_new_laws = self.edit_constitution # Proposer un nouveau texte de loi pris en charge par la Constitution
-        self.publish_official_messages = False # Publier un message sous l'identité du bot Serveur
-        self.sell_items = False # Vendre des objets ou services sur le marketplace
-        self.vote_president = False # Participer aux élections présidentielles
-        self.vote_representatives = False # Participer aux élections législatives
+        self.bank_accounts = Permission() # APPEND = ouvrir plusieurs comptes au lieu d'un seul, MANAGE = voir les infos globales concernant les comptes en banque, EDIT = gérer des comptes en banque, READ = voir les infos d'un compte en banque individuel
+        self.bots = Permission() # APPEND = publier un message sous l'identité d'un bot, MANAGE = proposer d'héberger un bot, EDIT = changer les paramètres d'un bot, READ = /
+        self.constitution = Permission() # APPEND = laws.append, MANAGE = laws.manage, EDIT = modifier la constitution, READ = /
+        self.items = Permission() # APPEND = vendre, MANAGE = gérer des items dont on n'est pas propriétaire (hors marketplace), EDIT = gérer des items dont on n'est pas propriétaire (dans le marketplace), READ = accéder au marketplace
+        self.laws = Permission() # APPEND = proposer un texte de loi, MANAGE = accepter ou refuser une proposition, EDIT = modifier un texte, READ = /
+        self.members = Permission() # APPEND = créer des entités, MANAGE = modérer des entités (hors Discord), EDIT = modifier des entités, READ = voir le profil des entités
+        self.national_channel = Permission() # APPEND = prendre la parole sur la chaîne nationale, MANAGE = voir qui peut prendre la parole, EDIT = modifier le planning de la chaîne nationale, READ = /
+        self.organizations = Permission() # APPEND = créer une nouvelle organisation, MANAGE = exécuter des actions administratives sur les organisations, EDIT = modifier des organisations, READ = voir le profil de n'importe quelle organisation
+        self.reports = Permission() # APPEND = déposer plainte, MANAGE = accépter ou refuser une plainte, EDIT = /, READ = accéder à d'éventuelles pièces jointes
+        self.state_budgets = Permission() # APPEND = débloquer un nouveau budget, MANAGE = gérer les budjets, EDIT = gérer les sommes pour chaque budjet, READ = accéder aux infos concernant les budgets
+        self.votes = Permission() # APPEND = participer à un vote, MANAGE = déclencher ou fermer un vote, EDIT = /, READ = lire les propriétés d'un vote avant sa fermeture
 
-    def edit(self, **permissions: bool) -> None:
-        for perm in permissions.items():
-            self.__setattr__(*perm)
+    def merge(self, permissions: dict[str, Permission] | typing.Self):
+        if isinstance(permissions, PositionPermissions):
+            permissions = permissions.__dict__
+
+        for key, val in permissions.items():
+            self.__getattribute__(key).merge(val)
+
 
 class Position:
     """
