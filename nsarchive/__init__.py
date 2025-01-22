@@ -20,8 +20,6 @@ from .cls.entities import *
 from .cls.republic import *
 from .cls.economy import *
 
-from .cls.exceptions import *
-
 # Import des instances
 from .instances._economy import EconomyInstance
 from .instances._entities import EntityInstance
