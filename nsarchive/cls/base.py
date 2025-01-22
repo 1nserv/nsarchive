@@ -1,7 +1,8 @@
+import io
 import json
+import requests
 import typing
-
-from supabase import Client
+import warnings
 
 class NSID(str):
     """
@@ -43,132 +44,163 @@ class Instance:
     """
     Instance qui servira de base à toutes les instances.
     """
-    def __init__(self, client: Client):
-        self.db = client
 
-    def _select_from_db(self, table: str, key: str = None, value: str = None) -> list:
+    def __init__(self, url: str, token: str = None):
+        self.url = url
+        self.token = token
+
+        self.default_headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
+
+    def request_token(self, username: str, password: str) -> str | None:
+        res = requests.post(f"{self.url}/auth/login", json = {
+            "username": username,
+            "password": password
+        })
+
+        if res.status_code == 200:
+            return res.json()["token"]
+        elif res.status_code in (401, 403):
+            raise PermissionError(res.json()['message'])
+        else:
+            raise Exception(f"Error {res.status_code}: {res.json()['message']}")
+
+    def _get_item(self, endpoint: str, body: dict = None, headers: dict = None) -> dict:
         """
-        Récupère des données JSON d'une table Supabase en fonction de l'ID.
+        Récupère des données JSON depuis l'API
 
         ## Paramètres
-        table: `str`:\n
-            Nom de la base
-        key: `str`\n
-            Clé à vérifier
-        value: `str`\n
-            Valeur de la clé à vérifier
+        endpoint: `str`:
+            Endpoint de l'URL
+        headers: `dict` (optional)
+            Headers à envoyer
+        body: `dict` (optional)
+            Données à envoyer
 
         ## Renvoie
         - `list` de tous les élements correspondants
         - `None` si aucune donnée n'est trouvée
         """
 
-        if key and value:
-            res = self.db.from_(table).select("*").eq(key, value).execute()
+        if not headers:
+            headers = self.default_headers
+
+        res = requests.get(f"{self.url}/{endpoint}", headers = headers, json = body, timeout = 5)
+
+        if 200 <= res.status_code < 300:
+            return res.json()
+        elif res.status_code == 404:
+            return
+        elif res.status_code in (403, 401):
+            raise PermissionError(res.json()['message'])
         else:
-            res = self.db.from_(table).select("*").execute()
+            raise Exception(f"Error {res.status_code}: {res.json()['message']}")
 
-        if res.data:
-            return res.data
-        else:
-            return None
-
-    def _get_by_ID(self, table: str, id: NSID) -> dict:
-        _data = self._select_from_db(table, 'id', id)
-
-        if _data is not None:
-            _data = _data[0]
+    def _get_by_ID(self, _class: str, id: NSID) -> dict:
+        _data = self._get_item(f"/model/{_class}/{id}")
 
         return _data
 
-    def _put_in_db(self, table: str, data: dict) -> None:
+    def _put_in_db(self, endpoint: str, body: dict, headers: dict = None) -> None:
         """
         Publie des données JSON dans une table Supabase en utilisant le client Supabase.
 
-        :param table: Nom de la table dans laquelle les données doivent être insérées
-        :param data: Dictionnaire contenant les données à publier
-        :return: Résultat de l'insertion
+        ## Paramètres
+        endpoint: `str`
+            Endpoint de l'URL
+        body: `dict`
+            Données à envoyer
+        headers: `dict` (optionnel)
+            Headers à envoyer
         """
 
-        res = self.db.from_(table).upsert(data).execute()
+        res = requests.post(f"{self.url}/{endpoint}", headers = headers, json = body)
 
-        return res
+        if 200 <= res.status_code < 300:
+            return res.json()
+        elif res.status_code in (403, 401):
+            raise PermissionError(res.json()['message'])
+        else:
+            raise Exception(f"Error {res.status_code}: {res.json()['message']}")
 
-    def _delete_from_db(self, table: str, key: str, value: str):
+    def _delete(self, _class: str, ids: list[NSID]) -> None:
         """
-        Supprime un enregistrement d'une table Supabase en fonction d'une clé et de sa valeur.
+        Supprime des données JSON dans une table Supabase en utilisant le client Supabase.
 
         ## Paramètres
-        table: `str`
-            Nom de la table dans laquelle les données doivent être supprimées
-        key: `str`
-            Clé à vérifier (par exemple "id" ou autre clé unique)
-        value: `str`
-            Valeur de la clé à vérifier pour trouver l'enregistrement à supprimer
-
-        ## Renvoie
-        - `True` si la suppression a réussi
-        - `False` si aucune donnée n'a été trouvée ou si la suppression a échoué
+        endpoint: `str`
+            Endpoint de l'URL
+        body: `dict`
+            Données à envoyer
         """
 
-        res = self.db.from_(table).delete().eq(key, value).execute()
+        res = requests.post(f"{self.url}/delete_{_class}", json = { "ids": ids })
 
-        return res
+        if 200 <= res.status_code < 300:
+            return res.json()
+        elif res.status_code in (403, 401):
+            raise PermissionError(res.json()['message'])
+        else:
+            raise Exception(f"Error {res.status_code}: {res.json()['message']}")
 
-    def _delete_by_ID(self, table: str, id: NSID):
-        res = self._delete_from_db(table, 'id', id)
+    def _delete_by_ID(self, _class: str, id: NSID):
+        warnings.showwarning("Method '_delete_by_id' is deprecated. Use '_delete' instead.")
+        self._delete(_class, id)
 
-        return res
-
-    def fetch(self, table: str, **query: typing.Any) -> list:
+    def fetch(self, _class: str, **query: typing.Any) -> list:
         matches = []
 
-        for key, value in query.items():
-            entity = self._select_from_db(table, key, value)
+        res = requests.get(f"{self.url}/fetch_{_class}", params = query)
 
-            if entity is not None:
-                matches.append(entity)
+        return list(set)
 
-        if query == {}:
-            matches = [ self._select_from_db(table) ]
 
-        if not matches or (len(matches) != len(query) and query != {}):
-            return []
-
-        _res = [ item for item in matches[0] if all(item in match for match in matches[1:]) ]
-
-        return _res
-
-    def _upload_to_storage(self, bucket: str, data: bytes, path: str, overwrite: bool = False, options: dict = {'content-type': 'image/png'}) -> dict:
+    def _upload_file(self, bucket: str, name: str, data: bytes, overwrite: bool = False, headers: dict = None) -> dict:
         """
         Envoie un fichier dans un bucket Supabase.
 
         ## Paramètres
-        bucket: `str`\n
+        bucket: `str`
             Nom du bucket où le fichier sera stocké
-        data: `bytes`\n
+        name: `str`
+            Nom du fichier dans le drive
+        data: `bytes`
             Données à uploader
-        path: `str`\n
-            Chemin dans le bucket où le fichier sera stocké
+        overwrite: `bool` (optional)
+            Overwrite ou non
+        headers: `dict` (optional)
+            Headers à envoyer
 
         ## Renvoie
         - `dict` contenant les informations de l'upload si réussi
         - `None` en cas d'échec
         """
 
-        options["upsert"] = json.dumps(overwrite)
+        if not headers:
+            headers = self.default_headers
+            headers['Content-Type'] = 'image/png'
 
-        if len(data) > 5 * 1000 ** 3:
-            raise ValueError("La limite d'un fichier à upload est de 1Mo")
+        body = {
+            "name": name,
+            "overwrite": json.dumps(overwrite)
+        }
 
-        res = self.db.storage.from_(bucket).upload(path, data, options)
+        file = ("file", "image/png", data)
 
-        if res.json().get("error"):
-            print("Erreur lors de l'upload:", res["error"])
+        res = requests.put(f"{self.url}/upload_file/{bucket}", headers = headers, json = body, files = [ file ])
 
-        return res
+        if res.status_code == 200:
+            return res.json()
+        elif res.status_code in (403, 401):
+            raise PermissionError(res.json()['message'])
+        elif res.status_code == 409:
+            raise FileExistsError(res.json()['message'])
+        else:
+            raise Exception(f"Error {res.status_code}: {res.json()['message']}") 
 
-    def _download_from_storage(self, bucket: str, path: str) -> bytes:
+    def _download_from_storage(self, bucket: str, path: str, headers: dict = None) -> bytes:
         """
         Télécharge un fichier depuis le stockage Supabase.
 
@@ -182,6 +214,14 @@ class Instance:
         - Le fichier demandé en `bytes`
         """
 
-        res = self.db.storage.from_(bucket).download(path)
+        if not headers:
+            headers = self.default_headers
 
-        return res
+        res = requests.get(f"{self.url}/drive/{bucket}/{path}", headers = headers)
+
+        if res.status_code == 200:
+            return res.json()
+        elif res.status_code in (403, 401):
+            raise PermissionError(res.json()['message'])
+        else:
+            raise Exception(f"Error {res.status_code}: {res.json()['message']}") 
