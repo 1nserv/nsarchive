@@ -103,7 +103,7 @@ class Instance:
 
         return _data
 
-    def _put_in_db(self, endpoint: str, body: dict, headers: dict = None) -> None:
+    def _put_in_db(self, endpoint: str, body: dict, headers: dict = None, use_PUT: bool = False) -> None:
         """
         Publie des données JSON dans une table Supabase en utilisant le client Supabase.
 
@@ -116,14 +116,19 @@ class Instance:
             Headers à envoyer
         """
 
-        res = requests.post(f"{self.url}/{endpoint}", headers = headers, json = body)
+        if not headers:
+            headers = headers
+
+        if use_PUT:
+            res = requests.put(f"{self.url}/{endpoint}", headers = headers, json = body)
+        else:
+            res = requests.post(f"{self.url}/{endpoint}", headers = headers, json = body)
 
         if 200 <= res.status_code < 300:
             return res.json()
-        elif res.status_code in (403, 401):
-            raise PermissionError(res.json()['message'])
         else:
-            raise Exception(f"Error {res.status_code}: {res.json()['message']}")
+            print(res.text)
+            res.raise_for_status()
 
     def _delete(self, _class: str, ids: list[NSID]) -> None:
         """
@@ -150,11 +155,16 @@ class Instance:
         self._delete(_class, id)
 
     def fetch(self, _class: str, **query: typing.Any) -> list:
-        matches = []
+        res = requests.get(f"{self.url}/fetch/{_class}", params = query)
 
-        res = requests.get(f"{self.url}/fetch_{_class}", params = query)
+        if res.status_code == 200:
+            matches = res.json()
+        elif res.status_code in (401, 403):
+            matches = []
+        else:
+            res.raise_for_status()
 
-        return list(set)
+        return matches
 
 
     def _upload_file(self, bucket: str, name: str, data: bytes, overwrite: bool = False, headers: dict = None) -> dict:

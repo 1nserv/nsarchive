@@ -13,7 +13,7 @@ Dependencies:
 Le fichier README.md fournit des détails supplémentaires pour l'utilisation.
 """
 
-# Import des types et des exceptions 
+# Import des types 
 from .cls.base import NSID
 from .cls.archives import *
 from .cls.entities import *
