@@ -1,10 +1,7 @@
-from supabase import create_client
-
 from ..cls.base import *
 from ..cls.entities import *
-from ..cls.archives import *
 
-from ..cls.exceptions import *
+from ..cls import entities # Pour les default_headers
 
 class EntityInstance(Instance):
     """
@@ -18,20 +15,24 @@ class EntityInstance(Instance):
     - Sanctions et modifications d'une entité: `.Action[ .AdminAction | .Sanction ]`
     """
 
-    def __init__(self, id: str, token: str) -> None:
-        super().__init__(create_client(f"https://{id}.supabase.co", token))
+    def __init__(self, url: str, token: str = None) -> None:
+        super().__init__(url, token)
+
+        entities.default_headers = self.default_headers
 
     """
     ---- ENTITÉS ----
     """
 
-    def get_entity(self, id: NSID) -> User | Organization | Entity:
+    def get_entity(self, id: NSID, _class: str = None) -> User | Organization | Entity:
         """
         Fonction permettant de récupérer le profil public d'une entité.\n
 
         ## Paramètres
-        id: `NSID`\n
+        id: `NSID`
             ID héxadécimal de l'entité à récupérer
+        _class: `str`
+            Classe du modèle à prendre (`.User` ou `.Organization`)
 
         ## Renvoie
         - `.User` dans le cas où l'entité choisie est un membre
@@ -41,56 +42,58 @@ class EntityInstance(Instance):
 
         id = NSID(id)
 
-        _data = self._get_by_ID('individuals', id)
-
-        if _data is None: # Aucune entité individuelle sous cet ID
-            _data = self._get_by_ID('organizations', id) # On cherche du côté des groupes
+        if _class == "user":
+            _data = self._get_by_ID('individuals', id)
+        elif _class == "group":
+            _data = self._get_by_ID('organizations', id)
         else:
-            _data['_type'] = 'user'
+            _data = self._get_by_ID('entities', id)
 
         if _data is None: # ID inexistant chez les entités
             return None
-        elif '_type' not in _data.keys(): # S'il existe chez les organisations, clé '_type' pas encore initialisée
+        elif "xp" in _data.keys():
+            _data['_type'] = 'user'
+        elif "parts" in _data.keys():
             _data['_type'] = 'organization'
+        else:
+            _data['_type'] = 'entity'
 
         if _data['_type'] == 'user':
             entity = User(id)
+            entity._url = f"{self.url}/model/individuals/{id}"
 
             entity.xp = _data['xp']
             entity.boosts = _data['boosts']
 
             entity.votes = [ NSID(vote) for vote in _data['votes'] ]
+            entity.groups = [ NSID(group) for group in _data['groups'] ]
         elif _data['_type'] == 'organization':
             entity = Organization(id)
+            entity._url = f"{self.url}/model/organizations/{id}"
+
+            res = requests.get(f"{entity._url}/avatar")
+
+            if res.status_code == 200:
+                entity.avatar = res.content
+            else:
+                warnings.warn(f"Failed to get avatar for {id}")
 
             entity.owner = self.get_entity(NSID(_data['owner_id']))
 
             for _member in _data['members']:
                 member = GroupMember(_member['id'])
-                member.permission_level = _member['position']
-
-                _member_profile = self.get_entity(member.id)
-
-                member.set_name(_member_profile.name)
-                member.position = _member_profile.position
-                member.registerDate = _member_profile.registerDate
-
-                member.xp = _member_profile.xp
-                member.boosts = _member_profile.boosts
-
-                member.permissions = _member_profile.permissions
-                member.votes = _member_profile.votes
+                member.permission_level = _member['level']
 
                 entity.append(member)
 
             entity.parts = []
 
-            for owner, attrs in _data['parts'].items():
+            for attrs in _data['parts']:
+                owner = attrs["owner"]
                 entity.parts.extend(attrs['count'] * [ Share(NSID(owner), attrs['worth'] // attrs['count']) ])
 
             entity.certifications = _data['certifications']
-            entity.avatar = self._download_from_storage('organizations', f"avatars/{entity.id}")
-        else:
+        else: 
             entity = Entity(id)
 
         entity.name = _data['name']
@@ -99,9 +102,9 @@ class EntityInstance(Instance):
 
         for  key, value in _data.get('additional', {}).items():
             if isinstance(value, str) and value.startswith('\n'):
-                entity.add_link(key, int(value[1:]))
+                entity.additional[key] = int(value[1:])
             else:
-                entity.add_link(key, value)
+                entity.additional[key] = value
 
         return entity
 
@@ -139,18 +142,28 @@ class EntityInstance(Instance):
             for member in entity.members:
                 _member = {
                     'id': NSID(member.id),
-                    'position': member.permission_level
+                    'level': member.permission_level
                 }
 
                 _data['members'] += [_member]
 
-            self._upload_to_storage('organizations', entity.avatar, f'/avatars/{entity.id}', overwrite = True)
+            entity.save_avatar()
         elif type(entity) == User:
             _data['xp'] = entity.xp
             _data['boosts'] = entity.boosts
-            _data['votes'] = [ NSID(vote) for vote in entity.votes]
+            # _data['votes'] = [ NSID(vote) for vote in entity.votes]
+        else:
+            return
 
-        self._put_in_db('individuals' if isinstance(entity, User) else 'organizations', _data)
+        self._put_in_db(
+            f"/new_model/{'individuals' if isinstance(entity, User) else 'organizations'}?id={urllib.parse.quote(entity.id)}&name={urllib.parse.quote(entity.name)}",
+            _data,
+            headers = self.default_headers,
+            use_PUT = True
+        )
+
+        entity._url = f"{self.url}/model/{'individuals' if isinstance(entity, User) else 'organizations'}/{entity.id}"
+
 
     def delete_entity(self, entity: Entity):
         """
@@ -161,14 +174,17 @@ class EntityInstance(Instance):
             L'entité à supprimer
         """
 
-        self._delete_by_ID('individuals' if isinstance(entity, User) else 'organizations', NSID(entity.id))
+        res = requests.post(f"{entity._url}/delete", headers = self.default_headers,)
+
+        if res.status_code != 200:
+            res.raise_for_status()
 
     def fetch_entities(self, **query: typing.Any) -> list[ Entity | User | Organization ]:
         """
         Récupère une liste d'entités en fonction d'une requête.
 
         ## Paramètres
-        query: `dict`\n
+        query: `**dict`\n
             La requête pour filtrer les entités.
 
         ## Renvoie
@@ -184,42 +200,11 @@ class EntityInstance(Instance):
                 _res = self.fetch('organizations', **query)
             else:
                 del query["_type"]
-                _res = self.fetch('individuals', **query)
-                _res.extend(self.fetch('organizations', **query))
+                _res = self.fetch('entities', **query)
         else:
-            _res = self.fetch('individuals', **query)
-            _res.extend(self.fetch('organizations', **query))
+            _res = self.fetch('entities', **query)
 
         return [ self.get_entity(NSID(entity['id'])) for entity in _res if entity is not None ]
-
-    def get_entity_groups(self, id: NSID) -> list[Organization]:
-        """
-        Récupère les groupes auxquels appartient une entité.
-
-        ## Paramètres
-        id: `NSID`\n
-            ID de l'entité.
-
-        ## Renvoie
-        - `list[.Organization]`
-        """
-
-        id = NSID(id)
-        _groups = self.fetch_entities(_type = 'organization')
-        groups = []
-
-        for group in _groups:
-            if group is None:
-                continue
-
-            if group.owner.id == id:
-                groups.append(group)
-
-            for member in group.members:
-                if member.id == id:
-                    groups.append(group)
-
-        return [ group for group in groups ]
 
     def get_position(self, id: str) -> Position:
         """
@@ -239,83 +224,7 @@ class EntityInstance(Instance):
             return None
 
         position = Position(id)
-        position.name = _data['title']
-        position.permissions.edit(**{ p: True for p in _data['permissions'] })
+        position.name = _data['name']
+        position.permissions.merge(_data['permissions'])
 
         return position
-
-    """
-    ---- ARCHIVES --
-    """
-
-    def _add_archive(self, archive: Archive):
-        """
-        Ajoute une archive d'une action (modification au sein d'un groupe ou sanction) dans la base de données.
-
-        ## Paramètres
-        - archive: `.Archive`\n
-            Archive à ajouter
-        """
-
-        archive.id = NSID(archive.id)
-        archive.author = NSID(archive.author)
-        archive.target = NSID(archive.target)
-
-        _data = archive.__dict__.copy()
-
-        if type(archive) == Sanction:
-            _data['_type'] = "sanction"
-        elif type(archive) == Report:
-            _data['_type'] = "report"
-        else:
-            _data['_type'] = "action"
-
-        self._put_in_db('archives', _data)
-
-    def _get_archive(self, id: NSID) -> Archive | Sanction:
-        """
-        Récupère une archive spécifique.
-
-        ## Paramètres
-        id: `NSID`\n
-            ID de l'archive.
-
-        ## Renvoie
-        - `.Archive | .Sanction `
-        """
-
-        id = NSID(id)
-        _data = self._get_by_ID('archives', id)
-
-        if _data is None:
-            return None
-
-        if _data['_type'] == "sanction": # Mute, ban, GAV, kick, détention, prune (xp seulement)
-            archive = Sanction(_data['author'], _data['target'])
-        elif _data['_type'] == "report": # Plainte
-            archive = Report(_data['author'], _data['target'])
-        else:
-            archive = Archive(_data['author'], _data['target'])
-
-        archive.id = id
-        archive.date = _data['date']
-        archive.action = _data['action']
-        archive.details = _data['details']
-
-        return archive
-
-    def _fetch_archives(self, **query) -> list[ Archive | Sanction ]:
-        """
-        Récupère une liste d'archives correspondant à la requête.
-
-        ## Paramètres
-        query: `dict`\n
-            Requête pour filtrer les archives.
-
-        ## Renvoie
-        - `list[.Archive | .Sanction]`
-        """
-
-        _res = self.fetch('archives', **query)
-
-        return [ self._get_archive(archive['id']) for archive in _res ]

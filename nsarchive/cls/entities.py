@@ -1,9 +1,28 @@
+import requests
 import time
+import typing
+import urllib.parse
 
-from .exceptions import *
 from .base import NSID
 
 from .. import utils
+
+default_headers = {}
+
+class Permission:
+    def __init__(self, initial: str = "----"):
+        self.append: bool
+        self.manage: bool
+        self.edit: bool
+        self.read: bool
+
+        self.load(initial)
+
+    def load(self, val: str) -> None:
+        if 'a' in val: self.append = True
+        if 'm' in val: self.manage = True
+        if 'e' in val: self.edit = True
+        if 'r' in val: self.read = True
 
 class PositionPermissions:
     """
@@ -11,26 +30,27 @@ class PositionPermissions:
     """
 
     def __init__(self) -> None:
-        # Membres
-        self.approve_laws = False # Approuver ou désapprouver les lois proposées (vaut aussi pour la Constitution)
-        self.buy_items = False # Acheter des items depuis le marketplace
-        self.create_organizations = False # Créer une organisation
-        self.edit_constitution = False # Proposer une modification de la Constitution
-        self.edit_laws = False # Proposer une modification des différents textes de loi
-        self.manage_entities = False # Gérer les membres et les organisations
-        self.manage_national_channel = False # Prendre la parole sur la chaîne nationale et avoir une priorité de passage sur les autres chaînes
-        self.manage_reports = False # Accepter ou refuser une plainte
-        self.manage_state_budgets = False # Gérer les différents budgets de l'État
-        self.moderate_members = False # Envoyer des membres en garde à vue, en détention ou toute autre sanction non présente sur le client Discord
-        self.propose_new_laws = self.edit_constitution # Proposer un nouveau texte de loi pris en charge par la Constitution
-        self.publish_official_messages = False # Publier un message sous l'identité du bot Serveur
-        self.sell_items = False # Vendre des objets ou services sur le marketplace
-        self.vote_president = False # Participer aux élections présidentielles
-        self.vote_representatives = False # Participer aux élections législatives
+        self.bank_accounts = Permission("a---") # APPEND = ouvrir un ou plusieurs comptes, MANAGE = voir les infos globales concernant les comptes en banque, EDIT = gérer des comptes en banque, READ = voir les infos d'un compte en banque individuel
+        self.bots = Permission() # APPEND = publier un message sous l'identité d'un bot, MANAGE = proposer d'héberger un bot, EDIT = changer les paramètres d'un bot, READ = /
+        self.constitution = Permission() # APPEND = laws.append, MANAGE = laws.manage, EDIT = modifier la constitution, READ = /
+        self.database = Permission() # APPEND = créer des sous-bases de données, MANAGE = gérer la abse de données, EDIT = modifier les éléments, READ = avoir accès à toutes les données sans exception
+        self.items = Permission("---r") # APPEND = vendre, MANAGE = gérer des items dont on n'est pas propriétaire (hors marketplace), EDIT = gérer des items dont on n'est pas propriétaire (dans le marketplace), READ = accéder au marketplace
+        self.laws = Permission() # APPEND = proposer un texte de loi, MANAGE = accepter ou refuser une proposition, EDIT = modifier un texte, READ = /
+        self.members = Permission("---r") # APPEND = créer des entités, MANAGE = modérer des entités (hors Discord), EDIT = modifier des entités, READ = voir le profil des entités
+        self.national_channel = Permission() # APPEND = prendre la parole sur la chaîne nationale, MANAGE = voir qui peut prendre la parole, EDIT = modifier le planning de la chaîne nationale, READ = /
+        self.organizations = Permission("---r") # APPEND = créer une nouvelle organisation, MANAGE = exécuter des actions administratives sur les organisations, EDIT = modifier des organisations, READ = voir le profil de n'importe quelle organisation
+        self.reports = Permission() # APPEND = déposer plainte, MANAGE = accépter ou refuser une plainte, EDIT = /, READ = accéder à des infos supplémentaires pour une plainte
+        self.state_budgets = Permission() # APPEND = débloquer un nouveau budget, MANAGE = gérer les budjets, EDIT = gérer les sommes pour chaque budjet, READ = accéder aux infos concernant les budgets
+        self.votes = Permission() # APPEND = déclencher un vote, MANAGE = fermer un vote, EDIT = /, READ = lire les propriétés d'un vote avant sa fermeture
 
-    def edit(self, **permissions: bool) -> None:
-        for perm in permissions.items():
-            self.__setattr__(*perm)
+    def merge(self, permissions: dict[str, str] | typing.Self):
+        if isinstance(permissions, PositionPermissions):
+            permissions = permissions.__dict__
+
+        for key, val in permissions.items():
+            perm: Permission = self.__getattribute__(key)
+            perm.load(val)
+
 
 class Position:
     """
@@ -71,7 +91,9 @@ class Entity:
     """
 
     def __init__(self, id: NSID) -> None:
-        self.id: NSID = NSID(id) # ID hexadécimal de l'entité (ou nom dans le cas de l'entreprise)
+        self._url = "" # URL de l'entité pour une requête GET
+
+        self.id: NSID = NSID(id) # ID hexadécimal de l'entité
         self.name: str = "Entité Inconnue"
         self.registerDate: int = 0
         self.position: Position = Position()
@@ -79,19 +101,55 @@ class Entity:
 
     def set_name(self, new_name: str) -> None:
         if len(new_name) > 32:
-            raise NameTooLongError(f"Name length mustn't exceed 32 characters.")
+            raise ValueError(f"Name length mustn't exceed 32 characters.")
 
-        self.name = new_name
+        res = requests.post(f"{self._url}/rename?name={new_name}", headers = default_headers)
+
+        if res.status_code == 200:
+            self.name = new_name
+        else:
+            print(res.status_code)
+            res.raise_for_status()
 
     def set_position(self, position: Position) -> None:
-        self.position = position
+        res = requests.post(f"{self._url}/change_position?position={position.id}", headers = default_headers)
+
+        if res.status_code == 200:
+            self.position = position
+        else:
+            res.raise_for_status()
 
     def add_link(self, key: str, value: str | int) -> None:
-        if isinstance(value, str) or isinstance(value, int):
+        if isinstance(value, str):
+            _class = "string"
+        elif isinstance(value, int):
+            _class = "integer"
+        else:
+            raise TypeError("Only strings and integers can be recorded as an additional link")
+
+        params = {
+            "link": key,
+            "value": value,
+            "type": _class
+        }
+
+        query = "&".join(f"{k}={ urllib.parse.quote(v) }" for k, v in params.items())
+
+        res = requests.post(f"{self._url}/add_link?{query}", headers = default_headers)
+
+        if res.status_code == 200:
             self.additional[key] = value
+        else:
+            print(res.text)
+            res.raise_for_status()
 
     def unlink(self, key: str) -> None:
-        del self.additional[key]
+        res = requests.post(f"{self._url}/remove_link?link={urllib.parse.quote(key)}", headers = default_headers)
+
+        if res.status_code == 200:
+            del self.additional[key]
+        else:
+            res.raise_for_status()
 
 class User(Entity):
     """
@@ -102,9 +160,7 @@ class User(Entity):
     - xp: `int`\n
         Points d'expérience de l'entité
     - boosts: `dict[str, int]`\n
-        Ensemble des boosts dont bénéficie l'entité
-    - permissions: `.PositionPermissions`\n
-        Fusion des permissions offertes par la position et les groupes
+        Ensemble des boosts dont bénéficie l'entité 
     - votes: `list[NSID]`\n
         Liste des votes auxquels a participé l'entité
     """
@@ -114,11 +170,7 @@ class User(Entity):
 
         self.xp: int = 0
         self.boosts: dict[str, int] = {}
-        self.permissions: PositionPermissions = PositionPermissions() # Elles seront définies en récupérant les permissions de sa position
-        self.votes: list[str] = []
-
-    def add_vote(self, id: NSID):
-        self.votes.append(NSID(id))
+        self.groups: list[NSID] = []
 
     def get_level(self) -> None:
         i = 0
@@ -128,15 +180,24 @@ class User(Entity):
         return i
 
     def add_xp(self, amount: int) -> None:
-        boost = 0 if 0 in self.boosts.values() else max(list(self.boosts.values()) + [ 1 ])
+        boost = 0 if 0 in self.boosts.values() or amount <= 0 else max(list(self.boosts.values()) + [ 1 ])
+        res = requests.post(f"{self._url}/add_xp?amount={amount * boost}", headers = default_headers)
 
-        self.xp += amount * boost
+        if res.status_code == 200:
+            self.xp += amount * boost
+        else:
+            res.raise_for_status()
 
     def edit_boost(self, name: str, multiplier: int = -1) -> None:
-        if multiplier >= 0:
-            self.boosts[name] = multiplier
+        res = requests.post(f"{self._url}/edit_boost?boost={name}&multiplier={multiplier}", headers = default_headers)
+
+        if res.status_code == 200:
+            if multiplier >= 0:
+                self.boosts[name] = multiplier
+            else:
+                del self.boosts[name]
         else:
-            del self.boosts[name]
+            res.raise_for_status()
 
 class MemberPermissions:
     """
@@ -145,45 +206,54 @@ class MemberPermissions:
 
     def __init__(self) -> None:
         self.manage_organization = False # Renommer l'organisation, changer le logo
-        self.manage_roles = False # Changer les rôles des membres
         self.manage_shares = False # Revaloriser les actions
+        self.manage_roles = False # Changer les rôles des membres
         self.manage_members = False # Virer quelqu'un d'une entreprise, l'y inviter
 
     def edit(self, **permissions: bool) -> None:
         for perm in permissions.values():
             self.__setattr__(*perm)
 
-class GroupMember(User):
+class GroupMember:
     """
     Membre au sein d'une entité collective
 
     ## Attributs
-    - Tous les attributs de la classe `.User`
-    - permission_level: `int`\n
+    - permission_level: `dict[str, int]`\n
         Niveau d'accréditation du membre (0 = salarié, 4 = administrateur)
     """
 
     def __init__(self, id: NSID) -> None:
-        super().__init__(id)
+        self.id = id
+        self.permission_level: dict = { # Échelle de permissions selon le groupe de travail
+            "general": 0 
+        }
 
-        self.permission_level: int = 0
-
-    def group_permissions(self) -> MemberPermissions:
+    def group_permissions(self, team: str = "general") -> MemberPermissions:
         p = MemberPermissions()
+        team_perms = self.permission_level[team]
 
-        if self.permission_level >= 1:
+        if team_perms >= 1: # Responsable
             p.manage_members = True
 
-        if self.permission_level >= 2:
-            p.manage_shares = True
-
-        if self.permission_level >= 3:
+        if team_perms >= 2: # Superviseur
             p.manage_roles = True
 
-        if self.permission_level >= 4:
+        if team_perms >= 3: # Chef d'équipe
+            pass
+
+        if team_perms >= 4: # Directeur
+            p.manage_shares = True
             p.manage_organization = True
 
         return p
+
+class GroupInvite:
+    def __init__(self, id: NSID):
+        self.id: NSID = id
+        self.team: str = "general"
+        self.level: str = 0
+        self._expires: int = round(time.time()) + 604800
 
 class Share:
     """
@@ -242,31 +312,48 @@ class Organization(Entity):
 
         self.certifications: dict = {}
         self.members: list[GroupMember] = []
+        self.invites: dict[GroupInvite] = []
 
         self.parts: list[Share] = 50 * [ Share(self.owner.id, 0) ]
 
-    def add_certification(self, certification: str) -> None:
-        self.certifications[certification] = round(time.time())
+    def add_certification(self, certification: str, __expires: int = 2419200) -> None:
+        res = requests.post(f"{self._url}/add_certification?name={certification}&duration={__expires}", headers = default_headers)
+
+        if res.status_code == 200:
+            self.certifications[certification] = int(round(time.time()) + __expires)
+        else:
+            res.raise_for_status()
 
     def has_certification(self, certification: str) -> bool:
         return certification in self.certifications.keys()
 
     def remove_certification(self, certification: str) -> None:
-        del self.certifications[certification]
+        res = requests.post(f"{self._url}/remove_certification?name={certification}", headers = default_headers)
 
-    def add_member(self, member: GroupMember) -> None:
-        if not isinstance(member, GroupMember):
-            raise TypeError("Le membre doit être de type GroupMember")
+        if res.status_code == 200:
+            del self.certifications[certification]
+        else:
+            res.raise_for_status()
 
-        self.members.append(member)
+    def invite_member(self, member: NSID, level: int = 0, team: str = "general") -> None:
+        if not isinstance(member, NSID):
+            raise TypeError("L'entrée membre doit être de type NSID")
+
+        res = requests.post(f"{self._url}/invite_member?id={member}&level={level}&team={team}", headers = default_headers)
+
+        if res.status_code == 200:
+            invite = GroupInvite(member)
+            invite.team = team
+            invite.level = level
+
+            self.invites.append(invite)
+        else:
+            res.raise_for_status()
 
     def remove_member(self, member: GroupMember) -> None:
         for _member in self.members:
             if _member.id == member.id:
                 self.members.remove(_member)
-
-    def append(self, member: GroupMember) -> None:
-        self.add_member(member)
 
     def remove(self, member: GroupMember) -> None:
         self.remove_member(member)
@@ -297,3 +384,9 @@ class Organization(Entity):
                     shares[share.owner] = 1
 
         return shares
+
+    def save_avatar(self, data: bytes = None):
+        if not data:
+            return
+
+        self.avatar = data

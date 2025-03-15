@@ -13,14 +13,12 @@ Dependencies:
 Le fichier README.md fournit des détails supplémentaires pour l'utilisation.
 """
 
-# Import des types et des exceptions 
+# Import des types 
 from .cls.base import NSID
 from .cls.archives import *
 from .cls.entities import *
 from .cls.republic import *
 from .cls.economy import *
-
-from .cls.exceptions import *
 
 # Import des instances
 from .instances._economy import EconomyInstance
