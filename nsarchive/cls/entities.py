@@ -1,7 +1,8 @@
 import requests
 import time
 import typing
-import urllib.parse
+import urllib
+import warnings
 
 from .base import NSID
 
@@ -37,6 +38,7 @@ class PositionPermissions:
         self.items = Permission("---r") # APPEND = vendre, MANAGE = gérer des items dont on n'est pas propriétaire (hors marketplace), EDIT = gérer des items dont on n'est pas propriétaire (dans le marketplace), READ = accéder au marketplace
         self.laws = Permission() # APPEND = proposer un texte de loi, MANAGE = accepter ou refuser une proposition, EDIT = modifier un texte, READ = /
         self.members = Permission("---r") # APPEND = créer des entités, MANAGE = modérer des entités (hors Discord), EDIT = modifier des entités, READ = voir le profil des entités
+        self.money = Permission("---r") # APPEND = créer des entités, MANAGE = modérer des entités (hors Discord), EDIT = modifier des entités, READ = voir le profil des entités
         self.national_channel = Permission() # APPEND = prendre la parole sur la chaîne nationale, MANAGE = voir qui peut prendre la parole, EDIT = modifier le planning de la chaîne nationale, READ = /
         self.organizations = Permission("---r") # APPEND = créer une nouvelle organisation, MANAGE = exécuter des actions administratives sur les organisations, EDIT = modifier des organisations, READ = voir le profil de n'importe quelle organisation
         self.reports = Permission() # APPEND = déposer plainte, MANAGE = accépter ou refuser une plainte, EDIT = /, READ = accéder à des infos supplémentaires pour une plainte
@@ -170,7 +172,13 @@ class User(Entity):
 
         self.xp: int = 0
         self.boosts: dict[str, int] = {}
-        self.groups: list[NSID] = []
+        self.votes: list[NSID] = []
+
+    def _load(self, _data: dict):
+        self.xp = _data['xp']
+        self.boosts = _data['boosts']
+
+        self.votes = [ NSID(vote) for vote in _data['votes'] ]
 
     def get_level(self) -> None:
         i = 0
@@ -255,37 +263,6 @@ class GroupInvite:
         self.level: str = 0
         self._expires: int = round(time.time()) + 604800
 
-class Share:
-    """
-    Action d'une entreprise
-
-    ## Attributs
-    - owner: `NSID`\n
-        Identifiant du titulaire de l'action
-    - price: `int`\n
-        Prix de l'action
-    """
-
-    def __getstate__(self) -> dict:
-        return {
-            "owner": self.owner,
-            "price": self.price
-        }
-
-    def __setstate__(self, state: dict):
-        self.owner: NSID = state['owner']
-        self.price: int = state['price']
-
-    def __init__(self, owner: NSID = NSID(0x0), price: int = 10):
-        self.owner: NSID = owner
-        self.price: int = price
-
-    def assign_owner(self, owner: NSID):
-        self.owner = owner
-
-    def set_price(self, price: int):
-        self.price = price
-
 class Organization(Entity):
     """
     Entité collective
@@ -314,7 +291,21 @@ class Organization(Entity):
         self.members: list[GroupMember] = []
         self.invites: dict[GroupInvite] = []
 
-        self.parts: list[Share] = 50 * [ Share(self.owner.id, 0) ]
+    def _load(self, _data: dict):
+        res = requests.get(f"{self._url}/avatar")
+
+        if res.status_code == 200:
+            self.avatar = res.content
+        else:
+            warnings.warn(f"Failed to get avatar for {self.id}")
+
+        for _member in _data['members']:
+            member = GroupMember(_member['id'])
+            member.permission_level = _member['level']
+
+            self.members.append(member)
+
+        self.certifications = _data['certifications']
 
     def add_certification(self, certification: str, __expires: int = 2419200) -> None:
         res = requests.post(f"{self._url}/add_certification?name={certification}&duration={__expires}", headers = default_headers)
@@ -363,27 +354,6 @@ class Organization(Entity):
 
     def get_members_by_attr(self, attribute: str = "id") -> list[str]:
         return [ member.__getattribute__(attribute) for member in self.members ]
-
-    def get_shares(self, include_worth: bool = False) -> dict[str, int] | dict[str, dict[str, int]]:
-        shares = {}
-
-        for share in self.parts:
-            if include_worth:
-                if share.owner in shares.keys():
-                    shares[share.owner]['count'] += 1
-                    shares[share.owner]['worth'] += share.price
-                else:
-                    shares[share.owner] = {
-                        'count': 1,
-                        'worth': share.price
-                    }
-            else:
-                if share.owner in shares.keys():
-                    shares[share.owner] += 1
-                else:
-                    shares[share.owner] = 1
-
-        return shares
 
     def save_avatar(self, data: bytes = None):
         if not data:

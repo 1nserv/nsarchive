@@ -53,7 +53,7 @@ class EntityInstance(Instance):
             return None
         elif "xp" in _data.keys():
             _data['_type'] = 'user'
-        elif "parts" in _data.keys():
+        elif "members" in _data.keys():
             _data['_type'] = 'organization'
         else:
             _data['_type'] = 'entity'
@@ -62,37 +62,13 @@ class EntityInstance(Instance):
             entity = User(id)
             entity._url = f"{self.url}/model/individuals/{id}"
 
-            entity.xp = _data['xp']
-            entity.boosts = _data['boosts']
-
-            entity.votes = [ NSID(vote) for vote in _data['votes'] ]
-            entity.groups = [ NSID(group) for group in _data['groups'] ]
+            entity._load(_data)
         elif _data['_type'] == 'organization':
             entity = Organization(id)
             entity._url = f"{self.url}/model/organizations/{id}"
+            entity.owner = self.get_entity(_data["owner_id"])
 
-            res = requests.get(f"{entity._url}/avatar")
-
-            if res.status_code == 200:
-                entity.avatar = res.content
-            else:
-                warnings.warn(f"Failed to get avatar for {id}")
-
-            entity.owner = self.get_entity(NSID(_data['owner_id']))
-
-            for _member in _data['members']:
-                member = GroupMember(_member['id'])
-                member.permission_level = _member['level']
-
-                entity.append(member)
-
-            entity.parts = []
-
-            for attrs in _data['parts']:
-                owner = attrs["owner"]
-                entity.parts.extend(attrs['count'] * [ Share(NSID(owner), attrs['worth'] // attrs['count']) ])
-
-            entity.certifications = _data['certifications']
+            entity._load(_data)
         else: 
             entity = Entity(id)
 
@@ -107,6 +83,16 @@ class EntityInstance(Instance):
                 entity.additional[key] = value
 
         return entity
+
+    def get_entity_groups(self, entity: User) -> list[Organization]:
+        print(entity._url)
+        res = requests.get(f"{entity._url}/groups", headers = self.default_headers)
+
+        if res.status_code == 200:
+            return res.json()
+        else:
+            res.raise_for_status()
+            return []
 
     def save_entity(self, entity: Entity):
         """
@@ -137,7 +123,6 @@ class EntityInstance(Instance):
             _data['owner_id'] = NSID(entity.owner.id) if entity.owner else NSID("0")
             _data['members'] = []
             _data['certifications'] = entity.certifications
-            _data['parts'] = entity.get_shares(True)
 
             for member in entity.members:
                 _member = {
@@ -151,7 +136,7 @@ class EntityInstance(Instance):
         elif type(entity) == User:
             _data['xp'] = entity.xp
             _data['boosts'] = entity.boosts
-            # _data['votes'] = [ NSID(vote) for vote in entity.votes]
+            _data['votes'] = [ NSID(vote) for vote in entity.votes]
         else:
             return
 
