@@ -1,16 +1,13 @@
 import time
 
-from supabase import create_client
-
 from ..cls.base import *
 from ..cls.archives import *
 from ..cls.republic import *
 
-from ..cls.exceptions import *
-
 
 class RepublicInstance(Instance):
     """
+        *INDISPONIBLE DANS CETTE VERSION.*\n
     Gère les interactions avec les votes, les archives de la république, et les fonctionnaires.
 
     ## Informations
@@ -19,8 +16,8 @@ class RepublicInstance(Instance):
     - Occupants des différents rôles et historique de leurs actions: `.Official`
     """
 
-    def __init__(self, id: str, token: str) -> None:
-        super().__init__(create_client(f"https://{id}.supabase.co", token))
+    def __init__(self, url: str, token: str) -> None:
+        super().__init__(url, token)
     
     """
     ---- VOTES & REFERENDUMS ----
@@ -28,6 +25,7 @@ class RepublicInstance(Instance):
 
     def get_vote(self, id: NSID) -> Vote | Referendum | Lawsuit:
         """
+        *INDISPONIBLE DANS CETTE VERSION.*\n
         Récupère un vote spécifique.
 
         ## Paramètres
@@ -37,6 +35,8 @@ class RepublicInstance(Instance):
         ## Renvoie
         - `.Vote | .Referendum | .Lawsuit`
         """
+
+        return Vote(NSID(id), "Vote Inconnu") # Provisoire
 
         id = NSID(id)
         _data = self._get_by_ID('votes', id)
@@ -74,12 +74,15 @@ class RepublicInstance(Instance):
 
     def save_vote(self, vote: Vote | Referendum | Lawsuit):
         """
+        *INDISPONIBLE DANS CETTE VERSION.*\n
         Sauvegarde un vote dans la base de données.
 
         ## Paramètres
         - vote: `.Vote`\n
             Vote à sauvegarder
         """
+
+        return # Provisoire
 
         vote.id = NSID(vote.id)
 
@@ -110,6 +113,7 @@ class RepublicInstance(Instance):
 
     def get_official(self, id: NSID, current_mandate: bool = True) -> Official:
         """
+        *INDISPONIBLE DANS CETTE VERSION.*\n
         Récupère les informations d'un fonctionnaire (mandats, contributions).
 
         ## Paramètres
@@ -121,6 +125,8 @@ class RepublicInstance(Instance):
         ## Renvoie
         - `.Official`
         """
+
+        return Official(NSID(id)) # Provisoire
 
         id = NSID(id)
 
@@ -149,7 +155,12 @@ class RepublicInstance(Instance):
         return user
 
     def get_institutions(self) -> State:
-        """Récupère l'état actuel des institutions de la république."""
+        """
+        *INDISPONIBLE DANS CETTE VERSION.*\n
+        Récupère l'état actuel des institutions de la république.
+        """
+
+        return State()
 
         admin = Administration()
         gov = Government(Official('0'))
@@ -192,6 +203,7 @@ class RepublicInstance(Instance):
 
     def update_institutions(self, institutions: State):
         """
+        *INDISPONIBLE DANS CETTE VERSION.*\n
         Fonction communément appelée après un vote législatif ou une nomination.\n
         Celle-ci met à jour: Le gouvernement (président, ministres), les différents députés et leur président, les différents juges, les différents policiers.\n
 
@@ -199,6 +211,8 @@ class RepublicInstance(Instance):
         institutions: `.State`\n
             Le nouvel état des institutions, à sauvegarder.
         """
+
+        return # Provisoire
 
         get_ids = lambda institution : [ member.id for member in institutions.__getattribute__(institution).members ]
 
@@ -219,6 +233,7 @@ class RepublicInstance(Instance):
 
     def new_mandate(self, institutions: State, weeks: int = 4):
         """
+        *INDISPONIBLE DANS CETTE VERSION.*\n
         Fonction qui amène à supprimer toutes les archives du mandat précédent
 
         ## Paramètres
@@ -227,6 +242,8 @@ class RepublicInstance(Instance):
         - weeks: `int`\n
             Nombre de semaines du mandat
         """
+
+        return # Provisoire
 
         for item in self.fetch('mandate'):
             if item['date'] >= round(time.time()) - weeks * 604800: # On évite de supprimer les informations écrites lors de la période définie
@@ -240,12 +257,15 @@ class RepublicInstance(Instance):
 
     def _add_archive(self, archive: Archive):
         """
+        *INDISPONIBLE DANS CETTE VERSION.*\n
         Ajoute une archive d'une action (élection, promotion, ou rétrogradation) dans la base de données.
 
         ## Paramètres
         - archive: `.Archive`\n
             Archive à ajouter
         """
+
+        return # Provisoire
 
         archive.id = NSID(archive.id)
         _data = archive.__dict__.copy()
@@ -264,6 +284,7 @@ class RepublicInstance(Instance):
 
     def _get_archive(self, id: NSID) -> Archive | Election | Promotion | Demotion:
         """
+        *INDISPONIBLE DANS CETTE VERSION.*\n
         Récupère une archive spécifique.
 
         ## Paramètres
@@ -273,6 +294,8 @@ class RepublicInstance(Instance):
         ## Renvoie
         - `.Archive | .Election | .Promotion | .Demotion`
         """
+
+        return Archive(NSID(id)) # Provisoire
 
         id = NSID(id)
         _data = self._get_by_ID('archives', id)
@@ -298,6 +321,7 @@ class RepublicInstance(Instance):
 
     def _fetch_archives(self, **query) -> list[ Archive | Election | Promotion | Demotion ]:
         """
+        *INDISPONIBLE DANS CETTE VERSION.*\n
         Récupère une liste d'archives correspondant à la requête.
 
         ## Paramètres
@@ -307,6 +331,8 @@ class RepublicInstance(Instance):
         ## Renvoie
         - `list[.Archive | .Election | .Promotion | .Demotion]`
         """
+
+        return [] # Provisoire
 
         _res = self.fetch('archives', **query)
         

@@ -105,7 +105,7 @@ class Instance:
 
     def _put_in_db(self, endpoint: str, body: dict, headers: dict = None, use_PUT: bool = False) -> None:
         """
-        Publie des données JSON dans une table Supabase en utilisant le client Supabase.
+        Publie des données JSON dans une table nation-db.
 
         ## Paramètres
         endpoint: `str`
@@ -132,13 +132,13 @@ class Instance:
 
     def _delete(self, _class: str, ids: list[NSID]) -> None:
         """
-        Supprime des données JSON dans une table Supabase en utilisant le client Supabase.
+        Supprime des données JSON dans une table nation-db.
 
         ## Paramètres
-        endpoint: `str`
-            Endpoint de l'URL
-        body: `dict`
-            Données à envoyer
+        _class: `str`
+            Classe des entités à supprimer
+        ids: `list[NSID]`
+            ID des entités à supprimer
         """
 
         res = requests.post(f"{self.url}/delete_{_class}", json = { "ids": ids })
@@ -169,7 +169,7 @@ class Instance:
 
     def _upload_file(self, bucket: str, name: str, data: bytes, overwrite: bool = False, headers: dict = None) -> dict:
         """
-        Envoie un fichier dans un bucket Supabase.
+        Envoie un fichier dans un bucket nation-db.
 
         ## Paramètres
         bucket: `str`
@@ -212,7 +212,7 @@ class Instance:
 
     def _download_from_storage(self, bucket: str, path: str, headers: dict = None) -> bytes:
         """
-        Télécharge un fichier depuis le stockage Supabase.
+        Télécharge un fichier depuis le stockage nation-db.
 
         ## Paramètres
         bucket: `str`\n
