@@ -1,3 +1,2 @@
 # Modules nécessaires pour le fonctionnement du projet
-supabase
 pillow
