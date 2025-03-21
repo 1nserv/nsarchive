@@ -71,9 +71,27 @@ class Position:
         self.name: str = "Inconnue"
         self.id = id
         self.permissions: PositionPermissions = PositionPermissions()
+        self.manager_permissions: PositionPermissions = PositionPermissions()
+
+        self._url: str = ""
 
     def __repr__(self):
         return self.id
+
+    def update_permisions(self, **permissions: str):
+        query = "&".join(f"{k}={ urllib.parse.quote(v) }" for k, v in permissions.items())
+
+        res = requests.post(f"{self._url}/update_permissions?{query}", headers = default_headers)
+
+        if res.status_code == 200:
+            self.permissions.merge(permissions)
+        else:
+            res.raise_for_status()
+
+    def _load(self, _data: dict):
+        self.name = _data['name']
+        self.permissions.merge(_data['permissions'])
+        self.manager_permissions.merge(_data['manager_permissions'])
 
 class Entity:
     """
@@ -285,19 +303,14 @@ class Organization(Entity):
         super().__init__(NSID(id))
 
         self.owner: Entity = User(NSID(0x0))
-        self.avatar: bytes = utils.open_asset('default_avatar.png')
+        self.avatar_url: str = self._url + '/avatar'
 
         self.certifications: dict = {}
         self.members: list[GroupMember] = []
         self.invites: dict[GroupInvite] = []
 
     def _load(self, _data: dict):
-        res = requests.get(f"{self._url}/avatar")
-
-        if res.status_code == 200:
-            self.avatar = res.content
-        else:
-            warnings.warn(f"Failed to get avatar for {self.id}")
+        self.avatar_url = self._url + '/avatar'
 
         for _member in _data['members']:
             member = GroupMember(_member['id'])
@@ -356,7 +369,4 @@ class Organization(Entity):
         return [ member.__getattribute__(attribute) for member in self.members ]
 
     def save_avatar(self, data: bytes = None):
-        if not data:
-            return
-
-        self.avatar = data
+        pass
