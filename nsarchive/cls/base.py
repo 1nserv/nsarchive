@@ -2,7 +2,10 @@ import io
 import json
 import requests
 import typing
-import warnings
+
+from .. import utils
+
+VERSION = 300
 
 class NSID(str):
     """
@@ -53,6 +56,20 @@ class Instance:
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
         }
+
+        try:
+            test_res = requests.get(f'{self.url}/ping')
+
+            if test_res.status_code == 200:
+                ndb_ver = test_res.json()['_version']
+                _litt = lambda x: '.'.join((str(x // 100), str(x % 100)))
+
+                if ndb_ver != VERSION:
+                    utils.warn(f"NationDB (v{_litt(ndb_ver)}) and NSArchive (v{_litt(VERSION)}) versions do not match. Some bugs may appear.")
+            else:
+                utils.warn("Something went wrong with the server.")
+        except:
+            utils.warn("NationDB is not responding.")
 
     def request_token(self, username: str, password: str) -> str | None:
         res = requests.post(f"{self.url}/auth/login", json = {
@@ -151,7 +168,7 @@ class Instance:
             raise Exception(f"Error {res.status_code}: {res.json()['message']}")
 
     def _delete_by_ID(self, _class: str, id: NSID):
-        warnings.showwarning("Method '_delete_by_id' is deprecated. Use '_delete' instead.")
+        utils.warn("Method '_delete_by_id' is deprecated. Use '_delete' instead.")
         self._delete(_class, id)
 
     def fetch(self, _class: str, **query: typing.Any) -> list:

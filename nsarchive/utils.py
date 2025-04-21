@@ -24,3 +24,6 @@ def compress_image(data: bytes, _max: int = 1000 ** 2) -> bytes:
     img.save(val)
 
     return val.getvalue()
+
+def warn(prompt: str):
+    print("\033[1;33mWarning:\033[0m", prompt)

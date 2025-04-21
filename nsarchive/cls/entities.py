@@ -31,17 +31,20 @@ class PositionPermissions:
     """
 
     def __init__(self) -> None:
-        self.bank_accounts = Permission("a---") # APPEND = ouvrir un ou plusieurs comptes, MANAGE = voir les infos globales concernant les comptes en banque, EDIT = gérer des comptes en banque, READ = voir les infos d'un compte en banque individuel
-        self.bots = Permission() # APPEND = publier un message sous l'identité d'un bot, MANAGE = proposer d'héberger un bot, EDIT = changer les paramètres d'un bot, READ = /
-        self.constitution = Permission() # APPEND = laws.append, MANAGE = laws.manage, EDIT = modifier la constitution, READ = /
-        self.database = Permission() # APPEND = créer des sous-bases de données, MANAGE = gérer la abse de données, EDIT = modifier les éléments, READ = avoir accès à toutes les données sans exception
-        self.items = Permission("---r") # APPEND = vendre, MANAGE = gérer des items dont on n'est pas propriétaire (hors marketplace), EDIT = gérer des items dont on n'est pas propriétaire (dans le marketplace), READ = accéder au marketplace
+        self.bots = Permission() # APPEND = /, MANAGE = proposer d'héberger un bot, EDIT = changer les paramètres d'un bot, READ = /
+        self.constitution = Permission() # APPEND = /, MANAGE = /, EDIT = modifier la constitution, READ = /
+        self.database = Permission() # APPEND = créer des sous-bases de données, MANAGE = gérer la base de données, EDIT = modifier les éléments, READ = avoir accès à toutes les données sans exception
+        self.inventories = Permission("a---") # APPEND = ouvrir un ou plusieurs comptes/inventaires, MANAGE = voir les infos globales concernant les comptes en banque ou inventaires, EDIT = gérer des comptes en banque (ou inventaires), READ = voir les infos d'un compte en banque ou inventaire
+        self.items = Permission("---r") # APPEND = créer un item, MANAGE = gérer les items, EDIT = modifier des items, READ = voir tous les items
         self.laws = Permission() # APPEND = proposer un texte de loi, MANAGE = accepter ou refuser une proposition, EDIT = modifier un texte, READ = /
+        self.loans = Permission() # APPEND = prélever de l'argent sur un compte, MANAGE = gérer les prêts/prélèvements, EDIT = modifier les prêts, READ = voir tous les prêts
         self.members = Permission("---r") # APPEND = créer des entités, MANAGE = modérer des entités (hors Discord), EDIT = modifier des entités, READ = voir le profil des entités
-        self.money = Permission("---r") # APPEND = créer des entités, MANAGE = modérer des entités (hors Discord), EDIT = modifier des entités, READ = voir le profil des entités
+        self.mines = Permission("----") # APPEND = générer des matières premières, MANAGE = gérer les accès aux réservoirs, EDIT = créer un nouveau réservoir, READ = récupérer des matières premières
+        self.money = Permission("----") # APPEND = générer ou supprimer de la monnaie, MANAGE = /, EDIT = /, READ = /
         self.national_channel = Permission() # APPEND = prendre la parole sur la chaîne nationale, MANAGE = voir qui peut prendre la parole, EDIT = modifier le planning de la chaîne nationale, READ = /
         self.organizations = Permission("---r") # APPEND = créer une nouvelle organisation, MANAGE = exécuter des actions administratives sur les organisations, EDIT = modifier des organisations, READ = voir le profil de n'importe quelle organisation
         self.reports = Permission() # APPEND = déposer plainte, MANAGE = accépter ou refuser une plainte, EDIT = /, READ = accéder à des infos supplémentaires pour une plainte
+        self.sales = Permission("---r") # APPEND = vendre, MANAGE = gérer les ventes, EDIT = modifier des ventes, READ = accéder au marketplace
         self.state_budgets = Permission() # APPEND = débloquer un nouveau budget, MANAGE = gérer les budjets, EDIT = gérer les sommes pour chaque budjet, READ = accéder aux infos concernant les budgets
         self.votes = Permission() # APPEND = déclencher un vote, MANAGE = fermer un vote, EDIT = /, READ = lire les propriétés d'un vote avant sa fermeture
 
@@ -129,7 +132,6 @@ class Entity:
         if res.status_code == 200:
             self.name = new_name
         else:
-            print(res.status_code)
             res.raise_for_status()
 
     def set_position(self, position: Position) -> None:
