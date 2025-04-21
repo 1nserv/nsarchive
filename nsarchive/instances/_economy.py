@@ -4,11 +4,15 @@ from ..cls.base import *
 from ..cls.archives import *
 from ..cls.economy import *
 
+from ..cls import economy # Pour les default_headers
+
 class EconomyInstance(Instance):
     """Indisponible dans cette version."""
 
     def __init__(self, url: str, token: str) -> None:
         super().__init__(url, token)
+
+        economy.default_headers = self.default_headers
 
     """
     ---- COMPTES EN BANQUE ----
@@ -16,7 +20,6 @@ class EconomyInstance(Instance):
 
     def get_account(self, id: NSID) -> BankAccount:
         """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
         Récupère les informations d'un compte bancaire.
 
         ## Paramètres
@@ -27,26 +30,27 @@ class EconomyInstance(Instance):
         - `.BankAccount`
         """
 
-        return BankAccount(NSID(id)) # Provisoire
-
         id = NSID(id)
-        _data = self._get_by_ID('accounts', id)
+        res = requests.get(f"{self.url}/bank/accounts/{id}", headers = self.default_headers)
+
+        if res.status_code == 200:
+            _data = res.json()
+        else:
+            res.raise_for_status()
+            return
 
         if _data is None:
             return None
 
         account = BankAccount(id)
-        account.amount = _data['amount']
-        account.frozen = _data['frozen']
-        account.owner = NSID(_data['owner_id'])
-        account.bank = _data['bank']
-        account.income = _data['income']
+        account._url = f"{self.url}/bank/accounts/{account.id}"
+
+        account._load(_data)
 
         return account
 
-    def save_account(self, account: BankAccount):
+    def save_account(self, account: BankAccount) -> str:
         """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
         Sauvegarde un compte bancaire dans la base de données.
 
         ## Paramètres
@@ -54,303 +58,321 @@ class EconomyInstance(Instance):
             Compte à sauvegarder
         """
 
-        return # Provisoire
-
         _data = {
             'id': NSID(account.id),
             'amount': account.amount,
             'frozen': account.frozen, 
-            'owner_id': account.owner, 
+            'owner_id': account.owner_id, 
             'bank': account.bank,
             'income': account.income
         }
 
-        self._put_in_db('accounts', _data)
+        res = requests.put(f"{self.url}/bank/register_account?owner={_data['owner_id']}", headers = self.default_headers, json = _data)
 
-    def freeze_account(self, account: BankAccount):
+        if res.status_code == 200:
+            account._url = f"{self.url}/bank/accounts/{account.id}"
+            account.id = res.json()['id']
+
+            return res.json()['digicode']
+        else:
+            res.raise_for_status()
+
+    def fetch_accounts(self, **query: typing.Any) -> list[BankAccount]:
         """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Gèle un compte bancaire pour empêcher toute transaction.
+        Récupère une liste de comptes en banque en fonction d'une requête.
 
         ## Paramètres
-        - account: `.BankAccount`\n
-            Compte à geler
-        """
-
-        return # Provisoire
-
-        account.id = NSID(account.id)
-        account.frozen = True
-
-        self.save_account(account)
-
-    """
-    ---- OBJETS & VENTES ----
-    """
-
-    def save_item(self, item: Item):
-        """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Sauvegarde des infos à propos d'un item.
-
-        ## Paramètres
-        item: `.Item`\n
-            Article à sauvegarder
-        """
-
-        return # Provisoire
-
-        _item = item.__dict__
-        self._put_in_db('items', _item)
-
-    def get_item(self, id: NSID) -> Item | None:
-        """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Récupère des informations à propos d'un item.
-
-        ## Paramètres
-        id: `NSID`\n
-            ID de l'item
-
-        ## Retourne
-        - `.Item` si quelque chose est trouvé, sinon
-        - `None`
-        """
-
-        return Item(NSID(id)) # Provisoire
-
-        _item = self._get_by_ID('items', id)
-
-        if _item is None:
-            return
-
-        item = Item(id)
-        item.title = _item['title']
-        item.emoji = _item['emoji']
-
-        return item
-
-    def delete_item(self, item: Item):
-        """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Annule le référencement d'un item.
-
-        ## Paramètres
-        item: `.Item`\n
-            Item à supprimer
-        """
-
-        return # Provisoire
-
-        self._delete_by_ID('items', item.id)
-
-    def get_sale(self, id: NSID) -> Sale | None:
-        """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Récupère une vente disponible sur le marketplace.
-
-        ## Paramètres
-        id: `NSID`\n
-            ID de la vente.
+        query: `**dict`\n
+            La requête pour filtrer les comptes.
 
         ## Renvoie
-        - `.Sale | None`: Le résultat de la vente
+        - `list[.BankAccount]`
         """
 
-        return Sale(NSID(id), Item(NSID(id))) # Provisoire
+        query = "&".join(f"{k}={ urllib.parse.quote(v) }" for k, v in query.items())
 
-        id = NSID(id)
+        _res = requests.get(f"{self.url}/fetch/accounts?{query}", headers = self.default_headers)
 
-        _data = self._get_by_ID('market', id)
+        if _res.status_code == 200:
+            _data = _res.json()
+        else:
+            _res.raise_for_status()
+            return []
 
-        if _data is None:
-            return None
+        res = []
 
-        item = self.get_item(_data['id'])
+        for _acc in _data:
+            if not _acc: continue
 
-        sale = Sale(NSID(id), Item(_data['id']) if item is None else item)
-        sale.__dict__ = _data
+            account = BankAccount(_acc["owner_id"])
 
-        return sale
+            account.id = NSID(_acc['id'])
+            account._url = f"{self.url}/bank/accounts/{account.id}"
 
-    def sell_item(self, item: Item, quantity: int, price: int, seller: NSID):
-        """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Vend un item sur le marché.
+            account._load(_acc)
 
-        ## Paramètres
-        item: `.Item`\n
-            Item à vendre
-        quantity: `int`\n
-            Nombre d'items à vendre
-        price: `int`\n
-            Prix à l'unité de chaque objet
-        seller: `NSID`\n
-            ID de l'auteur de la vente
-        """
+            res.append(account)
 
-        return # Provisoire
-
-        sale = Sale(NSID(round(time.time()) * 16 ** 3), item)
-        sale.quantity = quantity
-        sale.price = price
-        sale.seller_id = seller
-
-        _data = sale.__dict__.copy()
-
-        self._put_in_db('market', _data)
-
-    def delete_sale(self, sale: Sale) -> None:
-        """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Annule une vente sur le marketplace.
-        """
-
-        return # Provisoire
-
-        sale.id = NSID(sale.id)
-        self._delete_by_ID('market', NSID(sale.id))
+        return res
 
     """
     ---- INVENTAIRES ----
     """
 
-    def get_inventory(self, id: NSID) -> Inventory | None:
+    def get_inventory(self, id: NSID) -> Inventory:
         """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Récupérer un inventaire dans la base des inventaires.
+        Récupère les informations d'un inventaire.
 
         ## Paramètres
         id: `NSID`\n
-            ID du propriétaire de l'inventaire
+            ID de l'inventaire.
 
-        ## Retourne
-        - `.Inventory | None`: L'inventaire s'il a été trouvé
+        ## Renvoie
+        - `.Inventory`
         """
 
-        return Inventory(NSID(id)) # Provisoire
+        id = NSID(id)
+        res = requests.get(f"{self.url}/bank/inventories/{id}", headers = self.default_headers)
 
-        _data = self._get_by_ID('inventories', id)
+        if res.status_code == 200:
+            _data = res.json()
+        else:
+            res.raise_for_status()
+            return
 
         if _data is None:
             return None
 
         inventory = Inventory(id)
+        inventory._url = f"{self.url}/bank/inventories/{inventory.id}"
 
-        for _item in _data['objects']:
-            item = self.get_item(_item)
-
-            inventory.objects.append(item)
+        inventory._load(_data)
 
         return inventory
 
-    def save_inventory(self, inventory: Inventory):
+    def save_inventory(self, inventory: Inventory) -> str:
         """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Sauvegarder un inventaire
+        Sauvegarde un inventaire dans la base de données.
 
         ## Paramètres
-        inventory: `.Inventory`\n
+        - inventory: `.Inventory`\n
             Inventaire à sauvegarder
         """
 
-        return # Provisoire
-
         _data = inventory.__dict__
 
-        self._put_in_db('inventories', _data)
+        res = requests.put(f"{self.url}/bank/register_inventory?owner={_data['owner_id']}", headers = self.default_headers, json = _data)
 
-    def delete_inventory(self, inventory: Inventory):
-        """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Supprime un inventaire
+        if res.status_code == 200:
+            inventory._url = f"{self.url}/bank/inventories/{inventory.id}"
+            inventory.id = res.json()['id']
 
-        ## Paramètres
-        inventory: `.Inventory`
-            Inventaire à supprimer
-        """
-
-        return # Provisoire
-
-        self._delete_by_ID('inventories', inventory.owner_id)
-
-    """
-    ---- ARCHIVES ----
-    """
-
-    def _add_archive(self, archive: Archive):
-        """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Ajoute une archive d'une transaction ou d'une vente dans la base de données.
-
-        ## Paramètres
-        - archive: `.Archive`\n
-            Archive à ajouter
-        """
-
-        return # Provisoire
-
-        archive.id = NSID(archive.id)
-        archive.author = NSID(archive.author)
-        archive.target = NSID(archive.target)
-
-        _data = archive.__dict__.copy()
-
-        if type(archive) == Transaction:
-            _data['_type'] = "transaction"
+            return res.json()['digicode']
         else:
-            _data['_type'] = "action"
+            res.raise_for_status()
 
-        self._put_in_db('archives', _data)
-
-    def _get_archive(self, id: NSID) -> Archive | Transaction:
+    def fetch_inventories(self, **query: typing.Any) -> list[Inventory]:
         """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Récupère une archive spécifique.
+        Récupère une liste d'inventaires en fonction d'une requête.
+
+        ## Paramètres
+        query: `**dict`\n
+            La requête pour filtrer les inventaires.
+
+        ## Renvoie
+        - `list[.Inventory]`
+        """
+
+        query = "&".join(f"{k}={ urllib.parse.quote(v) }" for k, v in query.items())
+
+        _res = requests.get(f"{self.url}/fetch/inventories?{query}", headers = self.default_headers)
+
+        if _res.status_code == 200:
+            _data = _res.json()
+        else:
+            _res.raise_for_status()
+            return []
+
+        res = []
+
+        for _inv in _data:
+            if not _inv: continue
+
+            inventory = Inventory(_inv["owner_id"])
+
+            inventory.id = NSID(_inv['id'])
+            inventory._url = f"{self.url}/bank/inventories/{inventory.id}"
+
+            inventory._load(_inv)
+
+            res.append(inventory)
+
+        return res
+
+    """
+    ---- ITEMS ----
+    """
+
+    def get_item(self, id: NSID) -> Item:
+        """
+        Récupère les informations d'un item.
 
         ## Paramètres
         id: `NSID`\n
-            ID de l'archive.
+            ID de l'item.
 
         ## Renvoie
-        - `.Archive | .Transaction`
+        - `.Item`
         """
 
-        return Archive() # Provisoire
-
         id = NSID(id)
-        _data = self._get_by_ID('archives', id)
+        res = requests.get(f"{self.url}/marketplace/items/{id}", headers = self.default_headers)
+
+        if res.status_code == 200:
+            _data = res.json()
+        else:
+            res.raise_for_status()
+            return
 
         if _data is None:
             return None
 
-        if _data['_type'] == "transaction":
-            archive = Transaction(_data['author'], _data['target'])
-        else:
-            archive = Archive(_data['author'], _data['target'])
+        item = Item()
+        item.id = id
+        item._url = f"{self.url}/marketplace/items/{item.id}"
 
-        archive.id = id
-        archive.action = _data['action']
-        archive.date = _data['date']
-        archive.details = _data['details']
+        item._load(_data)
 
-        return archive
+        return item
 
-    def _fetch_archives(self, **query) -> list[ Archive | Transaction ]:
+    def save_item(self, item: Item) -> None:
         """
-        *INDISPONIBLE DANS CETTE VERSION.*\n
-        Récupère une liste d'archives correspondant à la requête.
+        Sauvegarde un item dans le marketplace.
 
         ## Paramètres
-        query: `dict`\n
-            Requête pour filtrer les archives.
-
-        ## Renvoie
-        - `list[.Archive | .Transaction]`
+        - item: `.Item`\n
+            Item à sauvegarder
         """
 
-        return [] # Provisoire
+        _data = item.__dict__
 
-        _res = self.fetch('archives', **query)
+        res = requests.put(f"{self.url}/marketplace/register_item", headers = self.default_headers, json = _data)
 
-        return [ self._get_archive(archive['id']) for archive in _res ]
+        if res.status_code == 200:
+            item._url = f"{self.url}/bank/inventories/{item.id}"
+            item.id = res.json()['id']
+        else:
+            res.raise_for_status()
+
+    def fetch_items(self, **query: typing.Any) -> list[Item]:
+        """
+        Récupère une liste d'items en fonction d'une requête.
+
+        ## Paramètres
+        query: `**dict`\n
+            La requête pour filtrer les items.
+
+        ## Renvoie
+        - `list[.Item]`
+        """
+
+        query = "&".join(f"{k}={ urllib.parse.quote(v) }" for k, v in query.items())
+
+        _res = requests.get(f"{self.url}/fetch/items?{query}", headers = self.default_headers)
+
+        if _res.status_code == 200:
+            _data = _res.json()
+        else:
+            _res.raise_for_status()
+            return []
+
+        res = []
+
+        for _item in _data:
+            if not _item: continue
+
+            item = Item()
+
+            item.id = NSID(_item['id'])
+            item._url = f"{self.url}/marketplace/items/{item.id}"
+
+            item._load(_item)
+
+            res.append(item)
+
+        return res
+
+
+    """
+    ---- VENTES ----
+    """
+
+    def get_sale(self, id: NSID) -> Sale:
+        """
+        Récupère les informations d'une annonce.
+
+        ## Paramètres
+        id: `NSID`\n
+            ID de la annonce.
+
+        ## Renvoie
+        - `.Sale`
+        """
+
+        id = NSID(id)
+        res = requests.get(f"{self.url}/marketplace/sales/{id}", headers = self.default_headers)
+
+        if res.status_code == 200:
+            _data = res.json()
+        else:
+            res.raise_for_status()
+            return
+
+        if _data is None:
+            return None
+
+        sale = Sale()
+        sale.id = id
+        sale._url = f"{self.url}/marketplace/sales/{sale.id}"
+
+        sale._load(_data)
+
+        return sale
+
+    def fetch_sales(self, **query: typing.Any) -> list[Sale]:
+        """
+        Récupère une liste d'annonces en fonction d'une requête.
+
+        ## Paramètres
+        query: `**dict`\n
+            La requête pour filtrer les annonces.
+
+        ## Renvoie
+        - `list[.Sale]`
+        """
+
+        query = "&".join(f"{k}={ urllib.parse.quote(v) }" for k, v in query.items())
+
+        _res = requests.get(f"{self.url}/fetch/sales?{query}", headers = self.default_headers)
+
+        if _res.status_code == 200:
+            _data = _res.json()
+        else:
+            _res.raise_for_status()
+            return []
+
+        res = []
+
+        for _sale in _data:
+            if not _sale: continue
+
+            sale = Sale()
+
+            sale.id = NSID(_sale['id'])
+            sale._url = f"{self.url}/marketplace/sales/{sale.id}"
+
+            sale._load(_sale)
+
+            res.append(sale)
+
+        return res
