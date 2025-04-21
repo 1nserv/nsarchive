@@ -89,6 +89,7 @@ class Position:
             res.raise_for_status()
 
     def _load(self, _data: dict):
+        self.id = _data['id']
         self.name = _data['name']
         self.permissions.merge(_data['permissions'])
         self.manager_permissions.merge(_data['manager_permissions'])
