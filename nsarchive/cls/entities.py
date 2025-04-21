@@ -131,7 +131,6 @@ class Entity:
         if res.status_code == 200:
             self.name = new_name
         else:
-            print(res.status_code)
             res.raise_for_status()
 
     def set_position(self, position: Position) -> None:
