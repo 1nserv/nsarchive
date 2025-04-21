@@ -52,12 +52,12 @@ class EntityInstance(Instance):
         if _data is None: # ID inexistant chez les entités
             return None
 
-        if _data['_class'] == 'user':
+        if _data['_class'] == 'individuals':
             entity = User(id)
             entity._url = f"{self.url}/model/individuals/{id}"
 
             entity._load(_data)
-        elif _data['_class'] == 'organization':
+        elif _data['_class'] == 'organizations':
             entity = Organization(id)
             entity._url = f"{self.url}/model/organizations/{id}"
 
