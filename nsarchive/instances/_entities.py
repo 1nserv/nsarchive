@@ -92,11 +92,23 @@ class EntityInstance(Instance):
         return entity
 
     def get_entity_groups(self, entity: User) -> list[Organization]:
-        print(entity._url)
         res = requests.get(f"{entity._url}/groups", headers = self.default_headers)
 
         if res.status_code == 200:
-            return res.json()
+            data = res.json()
+            groups = []
+
+            for grp in data:
+                if grp is None: continue
+
+                group = Organization(grp["id"])
+                group._url = f"{self.url}/model/organizations/{grp['id']}"
+
+                group._load(grp)
+
+                groups.append(group)
+
+            return groups
         else:
             res.raise_for_status()
             return []
