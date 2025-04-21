@@ -228,6 +228,14 @@ class User(Entity):
         else:
             res.raise_for_status()
 
+    def join_group(self, group: NSID) -> None:
+        res = requests.post(f"{self._url}/join_group?id={group}", headers = default_headers)
+
+        if res.status_code == 200:
+            return
+        else:
+            res.raise_for_status()
+
 class MemberPermissions:
     """
     Permissions d'un utilisateur à l'échelle d'un groupe
