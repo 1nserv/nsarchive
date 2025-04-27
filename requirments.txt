@@ -1,3 +1,7 @@
 # Modules nécessaires pour le fonctionnement du projet
 pillow
 requests
+
+# Pour les tests
+bcrypt
+python-dotenv

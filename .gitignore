@@ -164,3 +164,4 @@ test/*
 tests/*
 *.test.*
 test.*
+/.local
