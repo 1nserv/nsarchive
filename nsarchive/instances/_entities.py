@@ -166,7 +166,13 @@ class EntityInstance(Instance):
             use_PUT = True
         )
 
-        entity._url = f"{self.url}/model/{'individuals' if isinstance(entity, User) else 'organizations'}/{entity.id}"
+        if isinstance(entity, User):
+            entity._url = f"{self.url}/model/individuals/{entity.id}"
+        elif isinstance(entity, Organization):
+            entity._url = f"{self.url}/model/organizations/{entity.id}"
+            entity.avatar_url = f"{entity._url}/avatar"
+        else:
+            entity._url = f"{self.url}/model/entities/{entity.id}"
 
 
     def delete_entity(self, entity: Entity):
