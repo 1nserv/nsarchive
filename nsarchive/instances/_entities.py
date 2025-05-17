@@ -52,13 +52,12 @@ class EntityInstance(Instance):
 
         if _data['_class'] == 'individuals':
             entity = User(id)
-            entity._load(_data, f"{self.url}/model/individuals/{id}", self.default_headers)
         elif _data['_class'] == 'organizations':
             entity = Organization(id)
-            entity._load(_data, f"{self.url}/model/organizations/{id}", self.default_headers)
         else: 
             entity = Entity(id)
-            entity._load(_data, f"{self.url}/model/entities/{id}", self.default_headers)
+
+        entity._load(_data, self.url, self.default_headers)
 
         return entity
 
@@ -73,9 +72,7 @@ class EntityInstance(Instance):
                 if grp is None: continue
 
                 group = Organization(grp["id"])
-                group._url = f"{self.url}/model/organizations/{grp['id']}"
-
-                group._load(grp)
+                group._load(grp, self.url, self.default_headers)
 
                 groups.append(group)
 
@@ -192,13 +189,12 @@ class EntityInstance(Instance):
 
             if _entity['_class'] == 'individuals':
                 entity = User(_entity["id"])
-                entity._load(_entity, f"{self.url}/model/individuals/{_entity['id']}", self.default_headers)
             elif _entity['_class'] == 'organizations':
                 entity = Organization(_entity["id"])
-                entity._load(_entity, f"{self.url}/model/organizations/{_entity['id']}", self.default_headers)
             else:
                 entity = Entity(_entity["id"])
-                entity._load(_entity, f"{self.url}/model/organizations/{_entity['id']}", self.default_headers)
+
+            entity._load(_entity, self.url, self.default_headers)
 
             res.append(entity)
 
@@ -224,7 +220,7 @@ class EntityInstance(Instance):
             return None
 
         position = Position(id)
-        position._load(_data, f"{self.url}/positions/{id}", self.default_headers)
+        position._load(_data, self.url, self.default_headers)
 
         return position
 
@@ -245,7 +241,7 @@ class EntityInstance(Instance):
 
         for _data in _res:
             pos = Position()
-            pos._load(_data, f"{self.url}/positions/{_data['id']}", self.default_headers)
+            pos._load(_data, self.url, self.default_headers)
 
             res.append(pos)
 

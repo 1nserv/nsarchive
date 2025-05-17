@@ -95,7 +95,7 @@ class Position:
             res.raise_for_status()
 
     def _load(self, _data: dict, url: str, headers: dict) -> None:
-        self._url = url
+        self._url = url + '/model/positions/' + _data['id']
         self._headers = headers
 
         self.id = _data['id']
@@ -131,13 +131,13 @@ class Entity:
         self.additional: dict = {}
 
     def _load(self, _data: dict, url: str, headers: dict):
-        self._url = url
+        self._url = url + '/model/' + _data['_class'] + '/' + _data['id']
         self._headers = headers
 
         self.id = NSID(_data['id'])
         self.name = _data['name']
         self.registerDate = _data['register_date']
-        self.position._load(_data['position'])
+        self.position._load(_data['position'], url, headers)
 
         for  key, value in _data.get('additional', {}).items():
             if isinstance(value, str) and value.startswith('\n'):
@@ -218,13 +218,13 @@ class User(Entity):
         self.votes: list[NSID] = []
 
     def _load(self, _data: dict, url: str, headers: dict):
-        self._url = url
+        self._url = url + '/model/individuals/' + _data['id']
         self._headers = headers
 
         self.id = NSID(_data['id'])
         self.name = _data['name']
         self.registerDate = _data['register_date']
-        self.position._load(_data['position'])
+        self.position._load(_data['position'], url, headers)
 
         for  key, value in _data.get('additional', {}).items():
             if isinstance(value, str) and value.startswith('\n'):
@@ -357,13 +357,13 @@ class Organization(Entity):
         self.invites: dict[GroupInvite] = []
 
     def _load(self, _data: dict, url: str, headers: dict):
-        self._url = url
+        self._url = url + '/model/organizations/' + _data['id']
         self._headers = headers
 
         self.id = NSID(_data['id'])
         self.name = _data['name']
         self.registerDate = _data['register_date']
-        self.position._load(_data['position'])
+        self.position._load(_data['position'], url, headers)
 
         for  key, value in _data.get('additional', {}).items():
             if isinstance(value, str) and value.startswith('\n'):
@@ -375,13 +375,12 @@ class Organization(Entity):
 
         if _owner['_class'] == 'individuals':
             self.owner = User(_owner['id'])
-            self.owner._load(_owner, f"{self.url}/model/individuals/{_owner['id']}", self.default_headers)
         elif _owner['class'] == 'organizations':
             self.owner = Organization(_owner['id'])
-            self.owner._load(_owner, f"{self.url}/model/organizations/{_owner['id']}", self.default_headers)
         else:
             self.owner = Entity(_owner['id'])
-            self.owner._load(_owner, f"{self.url}/model/entities/{_owner['id']}", self.default_headers)
+
+        self.owner._load(_owner, url, headers)
 
         for _member in _data['members']:
             member = GroupMember(_member['id'])

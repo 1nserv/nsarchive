@@ -41,7 +41,7 @@ class BankAccount:
         self.flagged: bool = False
 
     def _load(self, _data: dict, url: str, headers: dict) -> None:
-        self._url = url
+        self._url = url + '/bank/accounts/' + _data['id']
         self._headers = headers
 
         self.id = NSID(_data['id'])
@@ -126,7 +126,7 @@ class Item:
         self.craft: dict = {}
 
     def _load(self, _data: dict, url: str, headers: dict) -> None:
-        self._url = url
+        self._url = url + '/marketplace/items/' + _data['id']
         self._headers = headers
 
         self.id = NSID(_data['id'])
@@ -174,7 +174,7 @@ class Sale:
         self.price: int = 0
 
     def _load(self, _data: dict, url: str, headers: dict) -> None:
-        self._url = url
+        self._url = url + '/marketplace/sales/' + _data['id']
         self._headers = headers
 
         self.id = _data['id']
@@ -215,7 +215,7 @@ class Inventory:
         self.items: dict[NSID, int] = {}
 
     def _load(self, _data: dict, url: str, headers: dict):
-        self._url = url
+        self._url = url + '/bank/inventories/' + _data['id']
         self._headers = headers
 
         self.id = NSID(_data['id'])
