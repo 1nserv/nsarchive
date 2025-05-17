@@ -83,6 +83,8 @@ class Instance:
         - `self` avec le token de l'alias
         """
 
+        alias = NSID(alias)
+
         token = self.token + ':' + str(alias)
 
         return self.__class__(self.url, token)
