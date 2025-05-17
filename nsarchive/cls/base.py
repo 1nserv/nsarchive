@@ -71,6 +71,22 @@ class Instance:
         except:
             utils.warn("NationDB is not responding.")
 
+    def alias(self, alias: NSID) -> typing.Self:
+        """
+        Duplique l'instance en se faisant passer pour une autre entité. Aucune erreur ne sera levée si l'entité n'existe pas.
+
+        ## Paramètres
+        alias: `NSID`\n
+            ID de l'entité à simuler
+
+        ## Renvoie
+        - `self` avec le token de l'alias
+        """
+
+        token = self.token + ':' + str(alias)
+
+        return self.__class__(self.url, token)
+
     def request_token(self, username: str, password: str) -> str | None:
         res = requests.post(f"{self.url}/auth/login", json = {
             "username": username,

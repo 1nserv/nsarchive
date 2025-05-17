@@ -43,9 +43,7 @@ class EconomyInstance(Instance):
             return None
 
         account = BankAccount(id)
-        account._url = f"{self.url}/bank/accounts/{account.id}"
-
-        account._load(_data)
+        account._load(_data, f"{self.url}/bank/accounts/{account.id}", self.default_headers)
 
         return account
 
@@ -107,9 +105,7 @@ class EconomyInstance(Instance):
             account = BankAccount(_acc["owner_id"])
 
             account.id = NSID(_acc['id'])
-            account._url = f"{self.url}/bank/accounts/{account.id}"
-
-            account._load(_acc)
+            account._load(_acc, f"{self.url}/bank/accounts/{account.id}", self.default_headers)
 
             res.append(account)
 
@@ -144,9 +140,7 @@ class EconomyInstance(Instance):
             return None
 
         inventory = Inventory(id)
-        inventory._url = f"{self.url}/bank/inventories/{inventory.id}"
-
-        inventory._load(_data)
+        inventory._load(_data, f"{self.url}/bank/inventories/{inventory.id}", self.default_headers)
 
         return inventory
 
@@ -201,9 +195,7 @@ class EconomyInstance(Instance):
             inventory = Inventory(_inv["owner_id"])
 
             inventory.id = NSID(_inv['id'])
-            inventory._url = f"{self.url}/bank/inventories/{inventory.id}"
-
-            inventory._load(_inv)
+            inventory._load(_inv, f"{self.url}/bank/inventories/{inventory.id}", self.default_headers)
 
             res.append(inventory)
 
@@ -238,10 +230,9 @@ class EconomyInstance(Instance):
             return None
 
         item = Item()
-        item.id = id
-        item._url = f"{self.url}/marketplace/items/{item.id}"
 
-        item._load(_data)
+        item.id = id
+        item._load(_data, f"{self.url}/marketplace/items/{item.id}", self.default_headers)
 
         return item
 
@@ -294,9 +285,7 @@ class EconomyInstance(Instance):
             item = Item()
 
             item.id = NSID(_item['id'])
-            item._url = f"{self.url}/marketplace/items/{item.id}"
-
-            item._load(_item)
+            item._load(_item, f"{self.url}/marketplace/items/{item.id}", self.default_headers)
 
             res.append(item)
 
@@ -332,10 +321,9 @@ class EconomyInstance(Instance):
             return None
 
         sale = Sale()
-        sale.id = id
-        sale._url = f"{self.url}/marketplace/sales/{sale.id}"
 
-        sale._load(_data)
+        sale.id = id
+        sale._load(_data, f"{self.url}/marketplace/sales/{sale.id}", self.default_headers)
 
         return sale
 
@@ -369,9 +357,7 @@ class EconomyInstance(Instance):
             sale = Sale()
 
             sale.id = NSID(_sale['id'])
-            sale._url = f"{self.url}/marketplace/sales/{sale.id}"
-
-            sale._load(_sale)
+            sale._load(_sale, f"{self.url}/marketplace/sales/{sale.id}", self.default_headers)
 
             res.append(sale)
 

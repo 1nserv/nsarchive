@@ -18,8 +18,6 @@ class EntityInstance(Instance):
     def __init__(self, url: str, token: str = None) -> None:
         super().__init__(url, token)
 
-        entities.default_headers = self.default_headers
-
     """
     ---- ENTITÉS ----
     """
@@ -54,40 +52,13 @@ class EntityInstance(Instance):
 
         if _data['_class'] == 'individuals':
             entity = User(id)
-            entity._url = f"{self.url}/model/individuals/{id}"
-
-            entity._load(_data)
+            entity._load(_data, f"{self.url}/model/individuals/{id}", self.default_headers)
         elif _data['_class'] == 'organizations':
             entity = Organization(id)
-            entity._url = f"{self.url}/model/organizations/{id}"
-
-            _owner = _data['owner']
-
-            if _owner['_class'] == 'individuals':
-                entity.owner = User(_owner['id'])
-                entity.owner._load(_owner)
-            elif _owner['class'] == 'organizations':
-                entity.owner = Organization(_owner['id'])
-                entity.owner._load(_owner)
-            else:
-                entity.owner = self.get_entity(0x0)
-
-            entity._load(_data)
+            entity._load(_data, f"{self.url}/model/organizations/{id}", self.default_headers)
         else: 
             entity = Entity(id)
-            entity._url = f"{self.url}/model/entities/{id}"
-
-        entity.name = _data['name']
-        entity.position._load(_data['position']) # Métier si c'est un utilisateur, domaine professionnel si c'est un collectif
-        entity.registerDate = _data['register_date']
-
-        for  key, value in _data.get('additional', {}).items():
-            if isinstance(value, str) and value.startswith('\n'):
-                entity.additional[key] = int(value[1:])
-            else:
-                entity.additional[key] = value
-
-        entity.position._url = f"{self.url}/positions/{id}"
+            entity._load(_data, f"{self.url}/model/entities/{id}", self.default_headers)
 
         return entity
 
@@ -221,39 +192,13 @@ class EntityInstance(Instance):
 
             if _entity['_class'] == 'individuals':
                 entity = User(_entity["id"])
-                entity._url = f"{self.url}/model/individuals/{_entity['id']}"
-
-                entity._load(_entity)
+                entity._load(_entity, f"{self.url}/model/individuals/{_entity['id']}", self.default_headers)
             elif _entity['_class'] == 'organizations':
                 entity = Organization(_entity["id"])
-                entity._url = f"{self.url}/model/organizations/{_entity['id']}"
-
-                _owner = _entity['owner']
-                if _owner['_class'] == 'individuals':
-                    entity.owner = User(_owner['id'])
-                    entity.owner._load(_owner)
-                elif _owner['class'] == 'organizations':
-                    entity.owner = Organization(_owner['id'])
-                    entity.owner._load(_owner)
-                else:
-                    entity.owner = self.get_entity(0x0)
-
-                entity._load(_entity)
+                entity._load(_entity, f"{self.url}/model/organizations/{_entity['id']}", self.default_headers)
             else:
                 entity = Entity(_entity["id"])
-                entity._url = f"{self.url}/model/organizations/{_entity['id']}"
-
-            entity.name = _entity['name']
-            entity.position._load(_entity['position'])
-            entity.registerDate = _entity['register_date']
-
-            for  key, value in _entity.get('additional', {}).items():
-                if isinstance(value, str) and value.startswith('\n'):
-                    entity.additional[key] = int(value[1:])
-                else:
-                    entity.additional[key] = value
-
-            entity.position._url = f"{self.url}/positions/{_entity['id']}"
+                entity._load(_entity, f"{self.url}/model/organizations/{_entity['id']}", self.default_headers)
 
             res.append(entity)
 
@@ -279,9 +224,29 @@ class EntityInstance(Instance):
             return None
 
         position = Position(id)
-        position._url = f"{self.url}/positions/{id}"
-        position.name = _data['name']
-        position.permissions.merge(_data['permissions'])
-        position.manager_permissions.merge(_data['manager_permissions'])
+        position._load(_data, f"{self.url}/positions/{id}", self.default_headers)
 
         return position
+
+    def fetch_positions(self, **query: typing.Any) -> list[Position]:
+        """
+        Récupère une liste de positions en fonction d'une requête.
+
+        ## Paramètres
+        query: `**dict`\n
+            La requête pour filtrer les positions.
+
+        ## Renvoie
+        - `list[.Position]`
+        """
+
+        _res = self.fetch('positions', **query)
+        res = []
+
+        for _data in _res:
+            pos = Position()
+            pos._load(_data, f"{self.url}/positions/{_data['id']}", self.default_headers)
+
+            res.append(pos)
+
+        return res

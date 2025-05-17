@@ -8,8 +8,6 @@ from .base import NSID
 
 from .. import utils
 
-default_headers = {}
-
 class Permission:
     def __init__(self, initial: str = "----"):
         self.append: bool
@@ -31,7 +29,9 @@ class PositionPermissions:
     """
 
     def __init__(self) -> None:
+        self.aliases = Permission() # APPEND = faire une requête au nom d'une autre entité, MANAGE = /, EDIT = /, READ = /
         self.bots = Permission() # APPEND = /, MANAGE = proposer d'héberger un bot, EDIT = changer les paramètres d'un bot, READ = /
+        self.candidacies = Permission() # APPEND = se présenter à une élection, MANAGE = gérer les candidatures d'une élection, EDIT = modifier une candidature, READ = /
         self.constitution = Permission() # APPEND = /, MANAGE = /, EDIT = modifier la constitution, READ = /
         self.database = Permission() # APPEND = créer des sous-bases de données, MANAGE = gérer la base de données, EDIT = modifier les éléments, READ = avoir accès à toutes les données sans exception
         self.inventories = Permission("a---") # APPEND = ouvrir un ou plusieurs comptes/inventaires, MANAGE = voir les infos globales concernant les comptes en banque ou inventaires, EDIT = gérer des comptes en banque (ou inventaires), READ = voir les infos d'un compte en banque ou inventaire
@@ -45,6 +45,7 @@ class PositionPermissions:
         self.organizations = Permission("---r") # APPEND = créer une nouvelle organisation, MANAGE = exécuter des actions administratives sur les organisations, EDIT = modifier des organisations, READ = voir le profil de n'importe quelle organisation
         self.reports = Permission() # APPEND = déposer plainte, MANAGE = accépter ou refuser une plainte, EDIT = /, READ = accéder à des infos supplémentaires pour une plainte
         self.sales = Permission("---r") # APPEND = vendre, MANAGE = gérer les ventes, EDIT = modifier des ventes, READ = accéder au marketplace
+        self.sanctions = Permission() # APPEND = sanctionner un membre, MANAGE = gérer les sanctions d'un membre, EDIT = modifier une sanction, READ = accéder au casier d'un membre
         self.state_budgets = Permission() # APPEND = débloquer un nouveau budget, MANAGE = gérer les budjets, EDIT = gérer les sommes pour chaque budjet, READ = accéder aux infos concernant les budgets
         self.votes = Permission() # APPEND = déclencher un vote, MANAGE = fermer un vote, EDIT = /, READ = lire les propriétés d'un vote avant sa fermeture
 
@@ -71,12 +72,14 @@ class Position:
     """
 
     def __init__(self, id: str = 'inconnu') -> None:
-        self.name: str = "Inconnue"
+        self._url: str = ""
+        self._headers: dict = {}
+
         self.id = id
+        self.name: str = "Inconnue"
         self.permissions: PositionPermissions = PositionPermissions()
         self.manager_permissions: PositionPermissions = PositionPermissions()
 
-        self._url: str = ""
 
     def __repr__(self):
         return self.id
@@ -84,14 +87,17 @@ class Position:
     def update_permisions(self, **permissions: str):
         query = "&".join(f"{k}={ urllib.parse.quote(v) }" for k, v in permissions.items())
 
-        res = requests.post(f"{self._url}/update_permissions?{query}", headers = default_headers)
+        res = requests.post(f"{self._url}/update_permissions?{query}", headers = self._headers)
 
         if res.status_code == 200:
             self.permissions.merge(permissions)
         else:
             res.raise_for_status()
 
-    def _load(self, _data: dict):
+    def _load(self, _data: dict, url: str, headers: dict) -> None:
+        self._url = url
+        self._headers = headers
+
         self.id = _data['id']
         self.name = _data['name']
         self.permissions.merge(_data['permissions'])
@@ -115,7 +121,8 @@ class Entity:
     """
 
     def __init__(self, id: NSID) -> None:
-        self._url = "" # URL de l'entité pour une requête GET
+        self._url: str = "" # URL de l'entité pour une requête
+        self._headers: dict = {}
 
         self.id: NSID = NSID(id) # ID hexadécimal de l'entité
         self.name: str = "Entité Inconnue"
@@ -123,11 +130,26 @@ class Entity:
         self.position: Position = Position()
         self.additional: dict = {}
 
+    def _load(self, _data: dict, url: str, headers: dict):
+        self._url = url
+        self._headers = headers
+
+        self.id = NSID(_data['id'])
+        self.name = _data['name']
+        self.registerDate = _data['register_date']
+        self.position._load(_data['position'])
+
+        for  key, value in _data.get('additional', {}).items():
+            if isinstance(value, str) and value.startswith('\n'):
+                self.additional[key] = int(value[1:])
+            else:
+                self.additional[key] = value
+
     def set_name(self, new_name: str) -> None:
         if len(new_name) > 32:
             raise ValueError(f"Name length mustn't exceed 32 characters.")
 
-        res = requests.post(f"{self._url}/rename?name={new_name}", headers = default_headers)
+        res = requests.post(f"{self._url}/rename?name={new_name}", headers = self._headers)
 
         if res.status_code == 200:
             self.name = new_name
@@ -135,7 +157,7 @@ class Entity:
             res.raise_for_status()
 
     def set_position(self, position: Position) -> None:
-        res = requests.post(f"{self._url}/change_position?position={position.id}", headers = default_headers)
+        res = requests.post(f"{self._url}/change_position?position={position.id}", headers = self._headers)
 
         if res.status_code == 200:
             self.position = position
@@ -158,7 +180,7 @@ class Entity:
 
         query = "&".join(f"{k}={ urllib.parse.quote(v) }" for k, v in params.items())
 
-        res = requests.post(f"{self._url}/add_link?{query}", headers = default_headers)
+        res = requests.post(f"{self._url}/add_link?{query}", headers = self._headers)
 
         if res.status_code == 200:
             self.additional[key] = value
@@ -167,7 +189,7 @@ class Entity:
             res.raise_for_status()
 
     def unlink(self, key: str) -> None:
-        res = requests.post(f"{self._url}/remove_link?link={urllib.parse.quote(key)}", headers = default_headers)
+        res = requests.post(f"{self._url}/remove_link?link={urllib.parse.quote(key)}", headers = self._headers)
 
         if res.status_code == 200:
             del self.additional[key]
@@ -195,7 +217,21 @@ class User(Entity):
         self.boosts: dict[str, int] = {}
         self.votes: list[NSID] = []
 
-    def _load(self, _data: dict):
+    def _load(self, _data: dict, url: str, headers: dict):
+        self._url = url
+        self._headers = headers
+
+        self.id = NSID(_data['id'])
+        self.name = _data['name']
+        self.registerDate = _data['register_date']
+        self.position._load(_data['position'])
+
+        for  key, value in _data.get('additional', {}).items():
+            if isinstance(value, str) and value.startswith('\n'):
+                self.additional[key] = int(value[1:])
+            else:
+                self.additional[key] = value
+
         self.xp = _data['xp']
         self.boosts = _data['boosts']
 
@@ -210,7 +246,7 @@ class User(Entity):
 
     def add_xp(self, amount: int) -> None:
         boost = 0 if 0 in self.boosts.values() or amount <= 0 else max(list(self.boosts.values()) + [ 1 ])
-        res = requests.post(f"{self._url}/add_xp?amount={amount * boost}", headers = default_headers)
+        res = requests.post(f"{self._url}/add_xp?amount={amount * boost}", headers = self._headers)
 
         if res.status_code == 200:
             self.xp += amount * boost
@@ -218,7 +254,7 @@ class User(Entity):
             res.raise_for_status()
 
     def edit_boost(self, name: str, multiplier: int = -1) -> None:
-        res = requests.post(f"{self._url}/edit_boost?boost={name}&multiplier={multiplier}", headers = default_headers)
+        res = requests.post(f"{self._url}/edit_boost?boost={name}&multiplier={multiplier}", headers = self._headers)
 
         if res.status_code == 200:
             if multiplier >= 0:
@@ -229,7 +265,7 @@ class User(Entity):
             res.raise_for_status()
 
     def join_group(self, group: NSID) -> None:
-        res = requests.post(f"{self._url}/join_group?id={group}", headers = default_headers)
+        res = requests.post(f"{self._url}/join_group?id={group}", headers = self._headers)
 
         if res.status_code == 200:
             return
@@ -320,8 +356,32 @@ class Organization(Entity):
         self.members: list[GroupMember] = []
         self.invites: dict[GroupInvite] = []
 
-    def _load(self, _data: dict):
-        self.avatar_url = self._url + '/avatar'
+    def _load(self, _data: dict, url: str, headers: dict):
+        self._url = url
+        self._headers = headers
+
+        self.id = NSID(_data['id'])
+        self.name = _data['name']
+        self.registerDate = _data['register_date']
+        self.position._load(_data['position'])
+
+        for  key, value in _data.get('additional', {}).items():
+            if isinstance(value, str) and value.startswith('\n'):
+                self.additional[key] = int(value[1:])
+            else:
+                self.additional[key] = value
+
+        _owner = _data['owner']
+
+        if _owner['_class'] == 'individuals':
+            self.owner = User(_owner['id'])
+            self.owner._load(_owner, f"{self.url}/model/individuals/{_owner['id']}", self.default_headers)
+        elif _owner['class'] == 'organizations':
+            self.owner = Organization(_owner['id'])
+            self.owner._load(_owner, f"{self.url}/model/organizations/{_owner['id']}", self.default_headers)
+        else:
+            self.owner = Entity(_owner['id'])
+            self.owner._load(_owner, f"{self.url}/model/entities/{_owner['id']}", self.default_headers)
 
         for _member in _data['members']:
             member = GroupMember(_member['id'])
@@ -332,7 +392,7 @@ class Organization(Entity):
         self.certifications = _data['certifications']
 
     def add_certification(self, certification: str, __expires: int = 2419200) -> None:
-        res = requests.post(f"{self._url}/add_certification?name={certification}&duration={__expires}", headers = default_headers)
+        res = requests.post(f"{self._url}/add_certification?name={certification}&duration={__expires}", headers = self._headers)
 
         if res.status_code == 200:
             self.certifications[certification] = int(round(time.time()) + __expires)
@@ -343,7 +403,7 @@ class Organization(Entity):
         return certification in self.certifications.keys()
 
     def remove_certification(self, certification: str) -> None:
-        res = requests.post(f"{self._url}/remove_certification?name={certification}", headers = default_headers)
+        res = requests.post(f"{self._url}/remove_certification?name={certification}", headers = self._headers)
 
         if res.status_code == 200:
             del self.certifications[certification]
@@ -354,7 +414,7 @@ class Organization(Entity):
         if not isinstance(member, NSID):
             raise TypeError("L'entrée membre doit être de type NSID")
 
-        res = requests.post(f"{self._url}/invite_member?id={member}&level={level}&team={team}", headers = default_headers)
+        res = requests.post(f"{self._url}/invite_member?id={member}&level={level}&team={team}", headers = self._headers)
 
         if res.status_code == 200:
             invite = GroupInvite(member)

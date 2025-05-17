@@ -4,7 +4,6 @@ import urllib
 
 from .base import NSID
 
-default_headers = {}
 
 class BankAccount:
     """
@@ -27,6 +26,7 @@ class BankAccount:
 
     def __init__(self, owner_id: NSID) -> None:
         self._url: str = ""
+        self._headers: dict = {}
 
         self.id: NSID = NSID(owner_id)
         self.owner_id: NSID = NSID(owner_id)
@@ -40,7 +40,12 @@ class BankAccount:
         self.frozen: bool = False
         self.flagged: bool = False
 
-    def _load(self, _data: dict):
+    def _load(self, _data: dict, url: str, headers: dict) -> None:
+        self._url = url
+        self._headers = headers
+
+        self.id = NSID(_data['id'])
+
         self.owner_id = NSID(_data['owner_id'])
         self.register_date = _data['register_date']
         self.tag = _data['tag']
@@ -53,7 +58,7 @@ class BankAccount:
         self.flagged = _data['flagged']
 
     def freeze(self, frozen: bool = True, reason: str = None) -> None:
-        res = requests.post(f"{self._url}/freeze?frozen={str(frozen).lower()}", headers = default_headers, json = {
+        res = requests.post(f"{self._url}/freeze?frozen={str(frozen).lower()}", headers = self._headers, json = {
             "reason": reason
         })
 
@@ -64,7 +69,7 @@ class BankAccount:
             res.raise_for_status()
 
     def flag(self, flagged: bool = True, reason: str = None) -> None:
-        res = requests.post(f"{self._url}/flag?flagged={str(flagged).lower()}", headers = default_headers, json = {
+        res = requests.post(f"{self._url}/flag?flagged={str(flagged).lower()}", headers = self._headers, json = {
             "reason": reason
         })
 
@@ -77,7 +82,7 @@ class BankAccount:
         _target_query = f"&target={target}"
         _loan_query = f"&loan_id={loan}"
 
-        res = requests.post(f"{self._url}/debit?amount={amount}{_target_query if target else ''}{_loan_query if loan else ''}", headers = default_headers, json = {
+        res = requests.post(f"{self._url}/debit?amount={amount}{_target_query if target else ''}{_loan_query if loan else ''}", headers = self._headers, json = {
             "reason": reason,
             "digicode": digicode
         })
@@ -88,7 +93,7 @@ class BankAccount:
             res.raise_for_status()
 
     def deposit(self, amount: int, reason: str = None) -> None:
-        res = requests.post(f"{self._url}/deposit?amount={amount}", headers = default_headers, json = {
+        res = requests.post(f"{self._url}/deposit?amount={amount}", headers = self._headers, json = {
             "reason": reason,
         })
 
@@ -111,20 +116,28 @@ class Item:
     """
 
     def __init__(self) -> None:
+        self._url: str = ""
+        self._headers: dict = {}
+
         self.id: NSID = NSID(round(time.time()))
         self.name: str = "Unknown Object"
         self.emoji: str = ":light_bulb:"
         self.category: str = "common"
         self.craft: dict = {}
 
-    def _load(self, _data: dict):
+    def _load(self, _data: dict, url: str, headers: dict) -> None:
+        self._url = url
+        self._headers = headers
+
+        self.id = NSID(_data['id'])
+
         self.name = _data['name']
         self.emoji = _data['emoji']
         self.category = _data['category']
         self.craft = _data['craft']
 
     def rename(self, new_name: str):
-        res = requests.post(f"{self._url}/rename?name={new_name}", headers = default_headers)
+        res = requests.post(f"{self._url}/rename?name={new_name}", headers = self._headers)
 
         if res.status_code == 200:
             self.name = new_name
@@ -150,6 +163,7 @@ class Sale:
 
     def __init__(self, item: Item) -> None:
         self._url: str = ""
+        self._headers: dict = {}
 
         self.id: NSID = NSID(round(time.time()))
         self.open: bool = True
@@ -159,8 +173,11 @@ class Sale:
         self.quantity: int = 1
         self.price: int = 0
 
-    def _load(self, _data: dict):
-        self.id = _data['json']
+    def _load(self, _data: dict, url: str, headers: dict) -> None:
+        self._url = url
+        self._headers = headers
+
+        self.id = _data['id']
         self.open = _data['open']
         self.seller_id = NSID(_data['seller_id'])
 
@@ -187,6 +204,7 @@ class Inventory:
 
     def __init__(self, owner_id: NSID) -> None:
         self._url: str = ""
+        self._headers: dict = {}
 
         self.id: NSID = NSID(owner_id)
         self.owner_id: NSID = NSID(owner_id)
@@ -196,7 +214,10 @@ class Inventory:
 
         self.items: dict[NSID, int] = {}
 
-    def _load(self, _data: dict):
+    def _load(self, _data: dict, url: str, headers: dict):
+        self._url = url
+        self._headers = headers
+
         self.id = NSID(_data['id'])
         self.owner_id = NSID(_data['owner_id'])
 
@@ -206,7 +227,7 @@ class Inventory:
         self.items = _data['items']
 
     def deposit_item(self, item: Item, giver: NSID = None, quantity: int = 1, digicode: str = None):
-        res = requests.post(f"{self._url}/deposit?item={item.id}&amount={quantity}", headers = default_headers, json = {
+        res = requests.post(f"{self._url}/deposit?item={item.id}&amount={quantity}", headers = self._headers, json = {
             "giver": giver,
             "digicode": digicode
         })
@@ -220,7 +241,7 @@ class Inventory:
             res.raise_for_status()
 
     def sell_item(self, item: Item, price: int, quantity: int = 1, digicode: str = None) -> NSID:
-        res = requests.post(f"{self._url}/sell_item?item={item.id}&quantity={quantity}&price={price}", headers = default_headers, json = {
+        res = requests.post(f"{self._url}/sell_item?item={item.id}&quantity={quantity}&price={price}", headers = self._headers, json = {
             "digicode": digicode
         })
 
