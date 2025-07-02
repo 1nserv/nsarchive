@@ -63,20 +63,25 @@ class Position:
     Position légale d'une entité
 
     ## Attributs
-    - name: `str`\n
-        Titre de la position
     - id: `str`\n
         Identifiant de la position
+    - name: `str`\n
+        Titre de la position
+    - is_global_scope: `str`\n
+        Permet de savoir si la position a des permissions en dehors de sa zone
     - permissions: `.PositionPermissions`\n
         Permissions accordées à l'utilisateur
+    - manager_permissions: `.PositionPermissions`\n
+        Permissions nécessaires pour gérer la position
     """
 
-    def __init__(self, id: str = 'inconnu') -> None:
+    def __init__(self, id: str = 'member') -> None:
         self._url: str = ""
         self._headers: dict = {}
 
         self.id = id
-        self.name: str = "Inconnue"
+        self.name: str = "Membre"
+        self.is_global_scope: bool = True
         self.permissions: PositionPermissions = PositionPermissions()
         self.manager_permissions: PositionPermissions = PositionPermissions()
 
@@ -100,6 +105,7 @@ class Position:
 
         self.id = _data['id']
         self.name = _data['name']
+        self.is_global_scope = _data['is_global_scope']
         self.permissions.merge(_data['permissions'])
         self.manager_permissions.merge(_data['manager_permissions'])
 
@@ -109,15 +115,17 @@ class Entity:
 
     ## Attributs
     - id: `NSID`\n
-        Identifiant de l'entité
+        Identifiant NSID
     - name: `str`\n
-        Nom d'usage de l'entité
-    - registerDate: `int`\n
-        Date d'enregistrement de l'entité
+        Nom d'usage
+    - register_date: `int`\n
+        Date d'enregistrement
+    - zone: `int`:\n
+        Zone civile
     - position: `.Position`\n
-        Position légale de l'entité
+        Position civile
     - additional: `dict`\n
-        Infos supplémentaires exploitables par les bots
+        Infos supplémentaires exploitables par différents services
     """
 
     def __init__(self, id: NSID) -> None:
@@ -126,7 +134,8 @@ class Entity:
 
         self.id: NSID = NSID(id) # ID hexadécimal de l'entité
         self.name: str = "Entité Inconnue"
-        self.registerDate: int = 0
+        self.register_date: int = 0
+        self.zone: int = 20 # 10 = Serveur test, 20 = Serveur principal, 30 = Serveur de patientage
         self.position: Position = Position()
         self.additional: dict = {}
 
@@ -136,7 +145,8 @@ class Entity:
 
         self.id = NSID(_data['id'])
         self.name = _data['name']
-        self.registerDate = _data['register_date']
+        self.register_date = _data['register_date']
+        self.zone = _data['zone']
         self.position._load(_data['position'], url, headers)
 
         for  key, value in _data.get('additional', {}).items():
@@ -223,7 +233,8 @@ class User(Entity):
 
         self.id = NSID(_data['id'])
         self.name = _data['name']
-        self.registerDate = _data['register_date']
+        self.register_date = _data['register_date']
+        self.zone = _data['zone']
         self.position._load(_data['position'], url, headers)
 
         for  key, value in _data.get('additional', {}).items():
@@ -264,22 +275,32 @@ class User(Entity):
         else:
             res.raise_for_status()
 
-    def join_group(self, group: NSID) -> None:
-        res = requests.post(f"{self._url}/join_group?id={group}", headers = self._headers)
+    def get_groups(self) -> list[Entity]:
+        res = requests.get(f"{self._url}/groups", headers = self._headers)
 
         if res.status_code == 200:
-            return
-        else:
-            res.raise_for_status()
+            data = res.json()
+            groups = []
 
-class MemberPermissions:
+            for grp in data:
+                if grp is None: continue
+
+                group = Organization(grp["id"])
+                group._load(grp, self.url, self._headers)
+
+                groups.append(group)
+
+            return groups
+        else:
+            return []
+
+class GroupPermissions:
     """
-    Permissions d'un utilisateur à l'échelle d'un groupe
+    Permissions d'un membre à l'échelle d'un groupe
     """
 
     def __init__(self) -> None:
         self.manage_organization = False # Renommer l'organisation, changer le logo
-        self.manage_shares = False # Revaloriser les actions
         self.manage_roles = False # Changer les rôles des membres
         self.manage_members = False # Virer quelqu'un d'une entreprise, l'y inviter
 
@@ -292,41 +313,13 @@ class GroupMember:
     Membre au sein d'une entité collective
 
     ## Attributs
-    - permission_level: `dict[str, int]`\n
-        Niveau d'accréditation du membre (0 = salarié, 4 = administrateur)
+    - permissions: `.GroupPermissions`\n
+        Permissions du membre au sein du groupe
     """
 
     def __init__(self, id: NSID) -> None:
         self.id = id
-        self.permission_level: dict = { # Échelle de permissions selon le groupe de travail
-            "general": 0 
-        }
-
-    def group_permissions(self, team: str = "general") -> MemberPermissions:
-        p = MemberPermissions()
-        team_perms = self.permission_level[team]
-
-        if team_perms >= 1: # Responsable
-            p.manage_members = True
-
-        if team_perms >= 2: # Superviseur
-            p.manage_roles = True
-
-        if team_perms >= 3: # Chef d'équipe
-            pass
-
-        if team_perms >= 4: # Directeur
-            p.manage_shares = True
-            p.manage_organization = True
-
-        return p
-
-class GroupInvite:
-    def __init__(self, id: NSID):
-        self.id: NSID = id
-        self.team: str = "general"
-        self.level: str = 0
-        self._expires: int = round(time.time()) + 604800
+        self.permissions: GroupPermissions = GroupPermissions()
 
 class Organization(Entity):
     """
@@ -354,7 +347,6 @@ class Organization(Entity):
 
         self.certifications: dict = {}
         self.members: list[GroupMember] = []
-        self.invites: dict[GroupInvite] = []
 
     def _load(self, _data: dict, url: str, headers: dict):
         self._url = url + '/model/organizations/' + _data['id']
@@ -362,7 +354,8 @@ class Organization(Entity):
 
         self.id = NSID(_data['id'])
         self.name = _data['name']
-        self.registerDate = _data['register_date']
+        self.register_date = _data['register_date']
+        self.zone = _data['zone']
         self.position._load(_data['position'], url, headers)
 
         for  key, value in _data.get('additional', {}).items():
@@ -375,7 +368,7 @@ class Organization(Entity):
 
         if _owner['_class'] == 'individuals':
             self.owner = User(_owner['id'])
-        elif _owner['class'] == 'organizations':
+        elif _owner['_class'] == 'organizations':
             self.owner = Organization(_owner['id'])
         else:
             self.owner = Entity(_owner['id'])
@@ -409,31 +402,38 @@ class Organization(Entity):
         else:
             res.raise_for_status()
 
-    def invite_member(self, member: NSID, level: int = 0, team: str = "general") -> None:
+    def add_member(self, member: NSID, permissions: GroupPermissions = GroupPermissions()) -> None:
         if not isinstance(member, NSID):
             raise TypeError("L'entrée membre doit être de type NSID")
 
-        res = requests.post(f"{self._url}/invite_member?id={member}&level={level}&team={team}", headers = self._headers)
+        res = requests.post(f"{self._url}/add_member?id={member}", headers = self._headers, json = {
+            "permissions": permissions.__dict__
+        })
 
         if res.status_code == 200:
-            invite = GroupInvite(member)
-            invite.team = team
-            invite.level = level
+            member = GroupMember(member)
+            member.permissions = permissions
 
-            self.invites.append(invite)
+            self.members.append(member)
         else:
             res.raise_for_status()
 
     def remove_member(self, member: GroupMember) -> None:
+        requests.post(f"{self._url}/remove_member?id={member.id}", headers = self._headers)
+
         for _member in self.members:
             if _member.id == member.id:
                 self.members.remove(_member)
 
-    def remove(self, member: GroupMember) -> None:
-        self.remove_member(member)
-
     def set_owner(self, member: User) -> None:
         self.owner = member
+
+    def get_member(self, id: NSID) -> GroupMember:
+        for member in self.members:
+            if member.id == id:
+                return member
+        else:
+            return
 
     def get_members_by_attr(self, attribute: str = "id") -> list[str]:
         return [ member.__getattribute__(attribute) for member in self.members ]

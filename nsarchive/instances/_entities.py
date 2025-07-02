@@ -61,86 +61,44 @@ class EntityInstance(Instance):
 
         return entity
 
-    def get_entity_groups(self, entity: User) -> list[Organization]:
-        res = requests.get(f"{entity._url}/groups", headers = self.default_headers)
-
-        if res.status_code == 200:
-            data = res.json()
-            groups = []
-
-            for grp in data:
-                if grp is None: continue
-
-                group = Organization(grp["id"])
-                group._load(grp, self.url, self.default_headers)
-
-                groups.append(group)
-
-            return groups
-        else:
-            res.raise_for_status()
-            return []
-
-    def save_entity(self, entity: Entity):
+    def create_entity(self, id: NSID, name: str, _class: str, position: str = 'membre', zone: int = 10):
         """
         Fonction permettant de créer ou modifier une entité.
 
         ## Paramètres
-        entity: `.Entity`\n
-            L'entité à sauvegarder
+        - id (`NSID`): Identifiant NSID
+        - name (`str`): Nom d'usage
+        - _class (`"user"` ou `"group"`): Type de l'entité
+        - position (`str`, optionnel): ID de la position civile
+        - zone (`int`, optionnel): ID de la zone civile
         """
 
-        entity.id = NSID(entity.id)
+        id = NSID(id)
 
-        _data = {
-            'id': entity.id,
-            'name': entity.name,
-            'position': entity.position.id,
-            'register_date': entity.registerDate,
-            'additional': {},
-        }
-
-        for key, value in entity.additional.items():
-            if isinstance(value, int) and len(str(int)) >= 15:
-                _data['additional'][key] = '\n' + str(value)
-            elif type(value) in (str, int):
-                _data['additional'][key] = value
-
-        if type(entity) == Organization:
-            _data['owner_id'] = NSID(entity.owner.id) if entity.owner else NSID("0")
-            _data['members'] = []
-            _data['certifications'] = entity.certifications
-
-            for member in entity.members:
-                _member = {
-                    'id': NSID(member.id),
-                    'level': member.permission_level
-                }
-
-                _data['members'] += [_member]
-
-            entity.save_avatar()
-        elif type(entity) == User:
-            _data['xp'] = entity.xp
-            _data['boosts'] = entity.boosts
-            _data['votes'] = [ NSID(vote) for vote in entity.votes]
+        if _class in ('group', 'organization'):
+            _class = 'organizations'
+        elif _class in ('user', 'individual'):
+            _class = 'individuals'
         else:
             return
 
         self._put_in_db(
-            f"/new_model/{'individuals' if isinstance(entity, User) else 'organizations'}?id={urllib.parse.quote(entity.id)}&name={urllib.parse.quote(entity.name)}",
-            _data,
+            f"/new_model/{_class}?id={urllib.parse.quote(id)}&name={urllib.parse.quote(name)}&position={urllib.parse.quote(position)}&zone={urllib.parse.quote(zone)}",
             headers = self.default_headers,
             use_PUT = True
         )
 
-        if isinstance(entity, User):
-            entity._url = f"{self.url}/model/individuals/{entity.id}"
+        entity = self.get_entity(id)
+
+        if _class == "individuals":
+            entity._url = f"{self.url}/model/individuals/{id}"
         elif isinstance(entity, Organization):
-            entity._url = f"{self.url}/model/organizations/{entity.id}"
+            entity._url = f"{self.url}/model/organizations/{id}"
             entity.avatar_url = f"{entity._url}/avatar"
         else:
-            entity._url = f"{self.url}/model/entities/{entity.id}"
+            entity._url = f"{self.url}/model/entities/{id}"
+
+        return entity
 
 
     def delete_entity(self, entity: Entity):
