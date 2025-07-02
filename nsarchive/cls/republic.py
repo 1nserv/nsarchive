@@ -1,3 +1,6 @@
+import requests
+import time
+
 from nsarchive.cls.base import NSID
 
 # Votes
@@ -29,7 +32,7 @@ class Vote:
         Identifiant du vote
     - title: `str`\n
         Titre du vote
-    - choices: list[.VoteOption]\n
+    - options: list[.VoteOption]\n
         Liste des choix disponibles
     - author: `NSID`\n
         Identifiant de l'auteur du vote
@@ -39,40 +42,73 @@ class Vote:
         Date limite pour voter
     """
 
-    def __init__(self, id: NSID, title: str) -> None:
-        self.id: NSID = NSID(id)
-        self.title: str = title
-        self.choices: list[VoteOption] = []
-        self.author: NSID = NSID("0")
-        self.startDate: int = 0
+    def __init__(self, id: NSID = None) -> None:
+        self._url: str
+        self._headers: dict
+
+        self.id: NSID = id if id else NSID(0)
+        self.title: str = ''
+        self.author: NSID = NSID(0)
+
+        self.startDate: int = round(time.time())
         self.endDate: int = 0
 
-    def by_id(self, id: str) -> VoteOption:
-        for opt in self.choices:
+        self.options: list[VoteOption] = []
+
+    def _load(self, _data: dict, url: str, headers: dict) -> None:
+        self._url = url + '/votes/' + _data['id']
+        self._headers = headers
+
+        self.id = NSID(_data['id'])
+        self.title = _data['title']
+        self.author = _data['author_id']
+
+        self.startDate = _data['start_date']
+        self.endDate = _data['end_date']
+
+        self.options = []
+
+        for opt in _data['options']:
+            option = VoteOption(opt["id"], opt["title"])
+            option.count = opt["count"]
+
+            self.options.append(option)
+
+    def get(self, id: str) -> VoteOption:
+        for opt in self.options:
             if opt.id == id:
                 return opt
-
-    def sorted(self, titles_only: bool = False) -> list[VoteOption] | list[str]:
-        sorted_list: list[VoteOption] = sorted(self.choices, lambda opt : opt.count)
-
-        if titles_only:
-            return [ opt.id for opt in sorted_list ]
         else:
-            return sorted_list
+            raise ValueError(f"Option {id} not found in vote {self.id}")
 
-class Referendum(Vote):
-    """
-    Vote à trois positions
-    """
+    def add_vote(self, id: str):
+        """
+        Ajoute un vote à l'option spécifiée
+        """
 
-    def __init__(self, id: NSID, title: str) -> None:
-        super().__init__(id, title)
+        res = requests.post(f"{self._url}/vote?choice={id}", headers = self._headers)
 
-        self.choices = [
-            VoteOption('yes', 'Oui'),
-            VoteOption('no', 'Non'),
-            VoteOption('blank', 'Pas d\'avis'),
-        ]
+        if res.status_code == 200:
+            for opt in self.options:
+                if opt.id == id:
+                    opt.count += 1
+                    break
+            else:
+                raise ValueError(f"Option {id} not found in vote {self.id}")
+        else:
+            res.raise_for_status()
+
+    def close(self):
+        """
+        Ferme le vote
+        """
+
+        res = requests.post(f"{self._url}/close", headers = self._headers)
+
+        if res.status_code == 200:
+            self.endDate = round(time.time())
+        else:
+            res.raise_for_status()
 
 class Lawsuit(Vote):
     """
@@ -82,68 +118,8 @@ class Lawsuit(Vote):
     def __init__(self, id: NSID, title: str) -> None:
         super().__init__(id, title)
 
-        self.choices = [
+        self.options = [
             VoteOption('guilty', 'Coupable'),
             VoteOption('innocent', 'Innocent'),
             VoteOption('blank', 'Pas d\'avis'),
         ]
-
-
-# Institutions (defs)
-
-class Official:
-    def __init__(self, id: NSID) -> None:
-        self.id: NSID = NSID(id)
-
-        self.mandates: int = {
-            'PRE_REP': 0, # Président de la République
-            'MIN': 0, # Différents ministres
-            'PRE_AS': 0, # Président de l'Assemblée Nationale
-            'REPR': 0 # Député
-        }
-
-        self.contributions: dict = {
-            'propose_project': 0,
-            'success_project': 0, 
-            'vote_law': 0
-        }
-
-class Administration:
-    def __init__(self) -> None:
-        self.president: Official
-        self.members: list[Official] = []
-
-class Government:
-    def __init__(self, president: Official) -> None:
-        self.president: Official = president
-        self.prime_minister: Official
-
-        self.inner_minister: Official
-        self.economy_minister: Official
-        self.justice_minister: Official
-        self.press_minister: Official
-        self.outer_minister: Official
-
-class Court:
-    def __init__(self) -> None:
-        self.president: Official
-        # On discutera de la mise en place d'un potentiel président. Pour l'instant c'est le Ministre de la Justice
-        self.members: list[Official] = []
-
-class Assembly:
-    def __init__(self) -> None:
-        self.president: Official
-        self.members: list[Official] = []
-
-class PoliceForces:
-    def __init__(self) -> None:
-        self.president: Official
-        self.members: list[Official] = []
-
-class State:
-    def __init__(self) -> None:
-        self.administration: Administration
-        self.government: Government
-        self.court: Court
-        self.assembly: Assembly
-        self.police: PoliceForces
