@@ -22,4 +22,4 @@ from .cls.economy import *
 # Import des instances
 from .instances._economy import EconomyInstance
 from .instances._entities import EntityInstance
-from .instances._republic import RepublicInstance
+from .instances._state import StateInstance
