@@ -51,6 +51,7 @@ class Instance:
     def __init__(self, url: str, token: str = None):
         self.url = url
         self.token = token
+        self.zone = 20 # 10 = Serveur test, 20 = Serveur principal, 30 = Serveur de patientage, 40 = Scratch World
 
         self.default_headers = {
             "Authorization": f"Bearer {self.token}",
