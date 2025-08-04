@@ -1,11 +1,11 @@
-from ..cls.base import *
-from ..cls.entities import *
+from ..models.base import *
+from ..models.entities import *
 
-from ..cls import entities # Pour les default_headers
+from ..models import entities # Pour les default_headers
 
-class EntityInstance(Instance):
+class EntityInterface(Interface):
     """
-    Instance qui vous permettra d'interagir avec les profils des membres ainsi que les différents métiers et secteurs d'activité.
+    Interface qui vous permettra d'interagir avec les profils des membres ainsi que les différents métiers et secteurs d'activité.
 
     ## Informations disponibles
     - Profil des membres et des entreprises: `.User | .Organization | .Entity`

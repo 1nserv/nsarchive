@@ -165,3 +165,6 @@ tests/*
 *.test.*
 test.*
 /.local
+
+# Automation
+publish.sh

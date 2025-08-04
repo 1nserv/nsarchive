@@ -1,4 +1,3 @@
-import io
 import json
 import requests
 import typing
@@ -40,12 +39,12 @@ class NSID(str):
         if value.startswith("0x"):
             value = value[2:]
 
-        instance = super(NSID, cls).__new__(cls, value.upper())
-        return instance
+        interface = super(NSID, cls).__new__(cls, value.upper())
+        return interface
 
-class Instance:
+class Interface:
     """
-    Instance qui servira de base à toutes les instances.
+    Instance qui servira de base à toutes les interfaces.
     """
 
     def __init__(self, url: str, token: str = None):
@@ -74,7 +73,7 @@ class Instance:
 
     def alias(self, alias: NSID) -> typing.Self:
         """
-        Duplique l'instance en se faisant passer pour une autre entité. Aucune erreur ne sera levée si l'entité n'existe pas.
+        Duplique l'interface en se faisant passer pour une autre entité. Aucune erreur ne sera levée si l'entité n'existe pas (hormis les éventuels 401 ou 404 renvoyés par le serveur).
 
         ## Paramètres
         alias: `NSID`\n

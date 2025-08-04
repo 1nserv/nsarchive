@@ -1,13 +1,12 @@
 import time
 
-from ..cls.base import *
-from ..cls.archives import *
-from ..cls.economy import *
+from ..models.base import *
+from ..models.economy import *
 
-from ..cls import economy # Pour les default_headers
+from ..models import economy # Pour les default_headers
 
-class EconomyInstance(Instance):
-    """Indisponible dans cette version."""
+class EconomyInterface(Interface):
+    """Interface qui vous permettra d'interagir avec les comptes en banque et les transactions économiques."""
 
     def __init__(self, url: str, token: str) -> None:
         super().__init__(url, token)
