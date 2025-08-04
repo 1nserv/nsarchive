@@ -1,7 +1,8 @@
 """
 nsarchive - API-wrapper pour récupérer des données liées à Nation.
 
-Version: 3.0.0a7
+Version: 3.0.0-alpha.8
+Date de sortie: 2025-08-04
 License: GPL-3.0
 Auteur : happex <110610727+okayhappex@users.noreply.github.com>
 
@@ -13,13 +14,17 @@ Le fichier README.md fournit des détails supplémentaires pour l'utilisation.
 """
 
 # Import des types 
-from .cls.base import NSID
-from .cls.archives import *
-from .cls.entities import *
-from .cls.republic import *
-from .cls.economy import *
+from .models.base import NSID
+from .models.entities import *
+from .models.economy import *
 
-# Import des instances
-from .instances._economy import EconomyInstance
-from .instances._entities import EntityInstance
-from .instances._state import StateInstance
+from .models.republic import *
+from .models.state import *
+from .models.justice import *
+
+# Import des interfaces
+from .models.base import Interface
+from .interfaces._entities import EntityInterface
+from .interfaces._economy import EconomyInterface
+from .interfaces._state import StateInterface
+from .interfaces._justice import JusticeInterface

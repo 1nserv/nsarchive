@@ -1,7 +1,7 @@
 import requests
 import time
 
-from nsarchive.cls.base import NSID
+from .base import NSID
 
 # Votes
 
@@ -110,7 +110,7 @@ class Vote:
         else:
             res.raise_for_status()
 
-class Lawsuit(Vote):
+class LawsuitVote(Vote):
     """
     Vote à trois positions pour un procès
     """
