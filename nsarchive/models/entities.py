@@ -10,10 +10,10 @@ from .. import utils
 
 class Permission:
     def __init__(self, initial: str = "----"):
-        self.append: bool
-        self.manage: bool
-        self.edit: bool
-        self.read: bool
+        self.append: bool = False
+        self.manage: bool = False
+        self.edit: bool = False
+        self.read: bool = False
 
         self.load(initial)
 
