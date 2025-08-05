@@ -108,12 +108,13 @@ class JusticeInterface(Interface):
         if title: payload['title'] = title
 
         res = requests.put(
-            f"{self.url}/justice/add_sanction?type={_type}&target={target}{('&duration=' + duration) if duration else ''}{('&case=' + lawsuit.id) if lawsuit else ''}",
+            f"{self.url}/justice/add_sanction?type={_type}&target={target}&date={str(round(time.time()))}{('&duration=' + str(duration)) if duration else ''}{('&case=' + lawsuit.id) if lawsuit else ''}",
             headers = self.default_headers,
             json = payload
         )
 
         if res.status_code != 200:
+            print(res.json())
             res.raise_for_status()
 
         sanction = Sanction(NSID(res.json()['id']))
