@@ -69,13 +69,15 @@ class StateInterface(Interface):
         if title:
             payload['title'] = title
 
-        res = requests.put(f"{self.url}/open_vote", headers = self.default_headers, json = _data)
+        res = requests.put(f"{self.url}/open_vote", headers = self.default_headers, json = payload)
 
         if res.status_code == 200:
             _data = res.json()
 
-            vote = Vote()
+            vote = Vote(_data['id'])
             vote._load(_data, url = f"{self.url}/votes/{_data['id']}", headers = self.default_headers)
+
+            return vote
         else:
             res.raise_for_status()
 
@@ -131,12 +133,12 @@ class StateInterface(Interface):
             "scale": scale
         }
 
-        res = requests.put(f"{self.url}/register_party?candidate={id}", headers = self.default_headers, json = _data)
+        res = requests.put(f"{self.url}/register_party?candidate={id}", headers = self.default_headers, json = payload)
 
         if res.status_code == 200:
             _data = res.json()
 
-            vote = Vote()
-            vote._load(_data, url = f"{self.url}/votes/{_data['id']}", headers = self.default_headers)
+            party = Party()
+            party._load(_data, url = f"{self.url}/parties/{_data['id']}", headers = self.default_headers)
         else:
             res.raise_for_status()
