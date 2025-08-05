@@ -60,7 +60,7 @@ class Sanction:
         self.date: int = round(time.time())
         self.duration: int = 0
         self.title: str = None
-        self.case: NSID = NSID('0')
+        self.lawsuit: NSID = NSID('0')
 
     def _load(self, _data: dict, url: str, headers: dict) -> None:
         self._url = url
@@ -72,7 +72,7 @@ class Sanction:
         self.date = _data['date']
         self.duration = _data['duration']
         self.title = _data['title']
-        self.case = NSID(_data['case'])
+        self.lawsuit = NSID(_data['lawsuit'])
 
 class Lawsuit:
     def __init__(self, id: NSID):
