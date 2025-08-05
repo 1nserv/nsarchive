@@ -57,6 +57,10 @@ class Interface:
             "Content-Type": "application/json",
         }
 
+        return
+
+        # Vérification (ralentit considérablement les requêtes)*
+
         try:
             test_res = requests.get(f'{self.url}/ping')
 
