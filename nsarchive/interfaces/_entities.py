@@ -110,7 +110,7 @@ class EntityInterface(Interface):
             L'entité à supprimer
         """
 
-        res = requests.post(f"{entity._url}/delete", headers = self.default_headers,)
+        res = requests.post(f"{entity._url}/delete", headers = self.default_headers)
 
         if res.status_code != 200:
             res.raise_for_status()
