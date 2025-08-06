@@ -1,8 +1,8 @@
 """
 nsarchive - API-wrapper pour récupérer des données liées à Nation.
 
-Version: 3.0.0-alpha.8
-Date de sortie: 2025-08-04
+Version: 3.0.0-beta.1
+Date de sortie: 2025-08-06
 License: GPL-3.0
 Auteur : happex <110610727+okayhappex@users.noreply.github.com>
 
