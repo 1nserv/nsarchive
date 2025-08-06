@@ -142,7 +142,7 @@ class Interface:
 
         return _data
 
-    def _put_in_db(self, endpoint: str, body: dict, headers: dict = None, use_PUT: bool = False) -> None:
+    def _put_in_db(self, endpoint: str, body: dict = {}, headers: dict = None, use_PUT: bool = False) -> None:
         """
         Publie des données JSON dans une table nation-db.
 
