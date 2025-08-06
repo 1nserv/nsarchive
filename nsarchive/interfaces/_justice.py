@@ -114,7 +114,6 @@ class JusticeInterface(Interface):
         )
 
         if res.status_code != 200:
-            print(res.json())
             res.raise_for_status()
 
         sanction = Sanction(NSID(res.json()['id']))

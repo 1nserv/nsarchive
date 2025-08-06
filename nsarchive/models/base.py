@@ -166,7 +166,6 @@ class Interface:
         if 200 <= res.status_code < 300:
             return res.json()
         else:
-            print(res.text)
             res.raise_for_status()
 
     def _delete(self, _class: str, ids: list[NSID]) -> None:

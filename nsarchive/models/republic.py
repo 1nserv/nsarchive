@@ -99,7 +99,6 @@ class Vote:
         if res.status_code == 200:
             self.get(id).count += 1
         else:
-            print(res.json())
             res.raise_for_status()
 
     def close(self):

@@ -73,14 +73,12 @@ class StateInterface(Interface):
 
         if res.status_code == 200:
             _data = res.json()
-            print(type(_data['options']))
 
             vote = Vote(_data['id'])
             vote._load(_data, url = f"{self.url}/votes/{_data['id']}", headers = self.default_headers)
 
             return vote
         else:
-            print(res.json())
             res.raise_for_status()
 
     # Aucune possibilité de supprimer un vote
@@ -133,7 +131,6 @@ class StateInterface(Interface):
 
             return election
         else:
-            # print(res.json())
             res.raise_for_status()
 
     """

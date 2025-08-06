@@ -195,7 +195,6 @@ class Entity:
         if res.status_code == 200:
             self.additional[key] = value
         else:
-            print(res.text)
             res.raise_for_status()
 
     def unlink(self, key: str) -> None:
