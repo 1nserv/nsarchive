@@ -1,3 +1,4 @@
+import json
 import requests
 import time
 
@@ -18,10 +19,19 @@ class VoteOption:
         Nombre de sympathisants pour cette option
     """
 
-    def __init__(self, id: str, title: str = None, count: int = 0):
-        self.id = id
-        self.title = title if title else id
-        self.count = count
+    def __init__(self, title: str, count: int = 0):
+        self.title: str = title
+        self.count: int = count
+
+    def __repr__(self) -> dict:
+        return json.dumps({
+            'title': self.title,
+            'count': self.count
+        })
+
+    def _load(self, _data: dict):
+        self.title = str(_data['title'])
+        self.count = int(_data['count'])
 
 class Vote:
     """
@@ -32,7 +42,7 @@ class Vote:
         Identifiant du vote
     - title: `str`\n
         Titre du vote
-    - options: list[.VoteOption]\n
+    - options: dict[str, .VoteOption]\n
         Liste des choix disponibles
     - author: `NSID`\n
         Identifiant de l'auteur du vote
@@ -53,31 +63,29 @@ class Vote:
         self.startDate: int = round(time.time())
         self.endDate: int = 0
 
-        self.options: list[VoteOption] = []
+        self.options: dict[str, VoteOption] = {}
 
     def _load(self, _data: dict, url: str, headers: dict) -> None:
-        self._url = url + '/votes/' + _data['id']
+        self._url = url
         self._headers = headers
 
         self.id = NSID(_data['id'])
         self.title = _data['title']
-        self.author = _data['author_id']
+        self.author = _data['author']
 
-        self.startDate = _data['start_date']
-        self.endDate = _data['end_date']
+        self.startDate = _data['start']
+        self.endDate = _data['end']
 
-        self.options = []
+        self.options = {}
 
-        for opt in _data['options']:
-            option = VoteOption(opt["id"], opt["title"])
-            option.count = opt["count"]
+        for _opt_id, opt in _data['options'].items():
+            option = VoteOption(*tuple(opt.values()))
 
-            self.options.append(option)
+            self.options[_opt_id] = option
 
     def get(self, id: str) -> VoteOption:
-        for opt in self.options:
-            if opt.id == id:
-                return opt
+        if id in self.options.keys():
+            return self.options[id]
         else:
             raise ValueError(f"Option {id} not found in vote {self.id}")
 
@@ -86,15 +94,10 @@ class Vote:
         Ajoute un vote à l'option spécifiée
         """
 
-        res = requests.post(f"{self._url}/vote?choice={id}", headers = self._headers)
+        res = requests.post(f"{self._url}/vote?option={id}", headers = self._headers)
 
         if res.status_code == 200:
-            for opt in self.options:
-                if opt.id == id:
-                    opt.count += 1
-                    break
-            else:
-                raise ValueError(f"Option {id} not found in vote {self.id}")
+            self.get(id).count += 1
         else:
             res.raise_for_status()
 

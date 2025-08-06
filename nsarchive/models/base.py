@@ -142,7 +142,7 @@ class Interface:
 
         return _data
 
-    def _put_in_db(self, endpoint: str, body: dict, headers: dict = None, use_PUT: bool = False) -> None:
+    def _put_in_db(self, endpoint: str, body: dict = {}, headers: dict = None, use_PUT: bool = False) -> None:
         """
         Publie des données JSON dans une table nation-db.
 
@@ -166,7 +166,6 @@ class Interface:
         if 200 <= res.status_code < 300:
             return res.json()
         else:
-            print(res.text)
             res.raise_for_status()
 
     def _delete(self, _class: str, ids: list[NSID]) -> None:

@@ -65,7 +65,6 @@ class BankAccount:
         if res.status_code == 200:
             self.frozen = frozen
         else:
-            print(res.text)
             res.raise_for_status()
 
     def flag(self, flagged: bool = True, reason: str = None) -> None:

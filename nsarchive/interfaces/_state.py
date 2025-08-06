@@ -43,7 +43,7 @@ class StateInterface(Interface):
 
         _data = res.json()
 
-        vote = Vote(id, _data['title'])
+        vote = Vote(id)
         vote._load(_data, url = f"{self.url}/votes/{id}", headers = self.default_headers)
 
         return vote
@@ -83,6 +83,56 @@ class StateInterface(Interface):
 
     # Aucune possibilité de supprimer un vote
 
+    def get_election(self, id: NSID) -> Election:
+        """
+        Récupère une élection.
+
+        ## Paramètres
+        id: `NSID`\n
+            ID de l'élection.
+
+        ## Renvoie
+        - `.Election`
+        """
+
+        id = NSID(id)
+        res = requests.get(f"{self.url}/elections/{id}", headers = self.default_headers)
+
+        if res.status_code != 200:
+            res.raise_for_status()
+
+        _data = res.json()
+
+        election = Election(id)
+        election._load(_data, url = f"{self.url}/elections/{id}", headers = self.default_headers)
+
+        return election
+
+    def open_election(self, vote: Vote, start: int = None, full: bool = False) -> Election:
+        """
+        Déclenche une élection dans la base de données.
+
+        ## Paramètres
+        - vote: `.Vote`\n
+            Vote associé
+        - start: `int` (optionnel)\n
+            Date de début du vote (timestamp, dure 4 jours)
+        - full: `bool` (optionnel)\n
+            Choix du type d'élections (True = présidentielles, False = législatives)
+        """
+
+        res = requests.put(f"{self.url}/open_election?vote={vote.id}&type={'full' if full else 'partial'}{('&date=' + str(start)) if start else ''}", headers = self.default_headers, json = {})
+
+        if res.status_code == 200:
+            _data = res.json()
+
+            election = Election(_data['id'])
+            election._load(_data, url = f"{self.url}/elections/{_data['id']}", headers = self.default_headers)
+
+            return election
+        else:
+            res.raise_for_status()
+
     """
     PARTIS
     """
@@ -102,8 +152,8 @@ class StateInterface(Interface):
         id = NSID(id)
         res = requests.get(f"{self.url}/parties/{id}", headers = self.default_headers)
 
-        if not res:
-            return None
+        if res.status_code != 200:
+            res.raise_for_status()
 
         _data = res.json()
 
@@ -130,7 +180,7 @@ class StateInterface(Interface):
         payload = {
             "color": color,
             "motto": motto,
-            "scale": scale
+            "scale": scale if isinstance(scale, dict) else scale._to_dict()
         }
 
         res = requests.put(f"{self.url}/register_party?candidate={id}", headers = self.default_headers, json = payload)
@@ -138,7 +188,9 @@ class StateInterface(Interface):
         if res.status_code == 200:
             _data = res.json()
 
-            party = Party()
-            party._load(_data, url = f"{self.url}/parties/{_data['id']}", headers = self.default_headers)
+            party = Party(_data['org_id'])
+            party._load(_data, url = f"{self.url}/parties/{_data['org_id']}", headers = self.default_headers)
+
+            return party
         else:
             res.raise_for_status()

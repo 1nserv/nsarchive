@@ -83,7 +83,7 @@ class EntityInterface(Interface):
             return
 
         self._put_in_db(
-            f"/new_model/{_class}?id={urllib.parse.quote(id)}&name={urllib.parse.quote(name)}&position={urllib.parse.quote(position)}&zone={urllib.parse.quote(zone)}",
+            f"/new_model/{_class}?id={id}&name={name}&position={position}&zone={zone}",
             headers = self.default_headers,
             use_PUT = True
         )
