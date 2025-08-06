@@ -40,16 +40,27 @@ class Election:
         self.type: str = 'full' # Partial = législatives, full = totales
         self.vote: Vote = None
 
-        self.add_vote = self.vote.add_vote
-        self.close = self.vote.close
-
     def _load(self, _data: dict, url: str = None, headers: str = None):
         self._url = url
         self._headers = headers
 
         self.id = _data['id']
         self.type = _data['type']
+
+        self.vote = Vote(_data['vote']['id'])
         self.vote._load(_data['vote'], url, headers)
+
+    def close(self):
+        if self.vote:
+            self.vote.close()
+        else:
+            return
+
+    def add_vote(self, id: str):
+        if self.vote:
+            self.vote.add_vote(id)
+        else:
+            return
 
     def submit_candidacy(self):
         res = requests.put(f"{self._url}/submit")
