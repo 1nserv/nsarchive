@@ -22,6 +22,8 @@ from .models.republic import *
 from .models.state import *
 from .models.justice import *
 
+from .models.scale import *
+
 # Import des interfaces
 from .models.base import Interface
 from .interfaces._entities import EntityInterface

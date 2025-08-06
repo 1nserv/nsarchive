@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import requests
 
 from .base import NSID
@@ -13,7 +15,7 @@ class Party:
         self.color: int = 0x000000
         self.motto: str = None
         self.scale: dict = {}
-        self.last_elected: int = None
+        self.last_election: int = None
 
     def _load(self, _data: dict, url: str = None, headers: dict = None):
         self._url = url
@@ -24,7 +26,10 @@ class Party:
         self.color = _data['color']
         self.motto = _data['motto']
         self.scale = _data['politiscales']
-        self.last_elected = _data['last_elected']
+        self.last_election = _data['last_election']
+
+    def cancel_candidacy(self, election: Election):
+        election.cancel_candidacy()
 
 class Election:
     def __init__(self, id: NSID):
