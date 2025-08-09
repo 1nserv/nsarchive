@@ -6,7 +6,7 @@ import warnings
 
 from .base import NSID
 
-from .. import utils
+from .. import utils, errors
 
 class Permission:
     def __init__(self, initial: str = "----"):
@@ -96,8 +96,27 @@ class Position:
 
         if res.status_code == 200:
             self.permissions.merge(permissions)
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def _load(self, _data: dict, url: str, headers: dict) -> None:
         self._url = url + '/model/positions/' + _data['id']
@@ -163,8 +182,27 @@ class Entity:
 
         if res.status_code == 200:
             self.name = new_name
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def set_position(self, position: Position) -> None:
         res = requests.post(f"{self._url}/change_position?position={position.id}", headers = self._headers)
@@ -194,16 +232,54 @@ class Entity:
 
         if res.status_code == 200:
             self.additional[key] = value
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def unlink(self, key: str) -> None:
         res = requests.post(f"{self._url}/remove_link?link={urllib.parse.quote(key)}", headers = self._headers)
 
         if res.status_code == 200:
             del self.additional[key]
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
 class User(Entity):
     """
@@ -260,8 +336,27 @@ class User(Entity):
 
         if res.status_code == 200:
             self.xp += amount * boost
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def edit_boost(self, name: str, multiplier: int = -1) -> None:
         res = requests.post(f"{self._url}/edit_boost?boost={name}&multiplier={multiplier}", headers = self._headers)
@@ -271,8 +366,27 @@ class User(Entity):
                 self.boosts[name] = multiplier
             else:
                 del self.boosts[name]
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def get_groups(self) -> list[Entity]:
         res = requests.get(f"{self._url}/groups", headers = self._headers)
@@ -290,8 +404,27 @@ class User(Entity):
                 groups.append(group)
 
             return groups
-        else:
-            return []
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
 class GroupPermissions:
     """
@@ -387,8 +520,27 @@ class Organization(Entity):
 
         if res.status_code == 200:
             self.certifications[certification] = int(round(time.time()) + __expires)
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def has_certification(self, certification: str) -> bool:
         return certification in self.certifications.keys()
@@ -398,8 +550,27 @@ class Organization(Entity):
 
         if res.status_code == 200:
             del self.certifications[certification]
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def add_member(self, member: NSID, permissions: GroupPermissions = GroupPermissions()) -> None:
         if not isinstance(member, NSID):
@@ -414,15 +585,56 @@ class Organization(Entity):
             member.permissions = permissions
 
             self.members.append(member)
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def remove_member(self, member: GroupMember) -> None:
-        requests.post(f"{self._url}/remove_member?id={member.id}", headers = self._headers)
+        res = requests.post(f"{self._url}/remove_member?id={member.id}", headers = self._headers)
 
-        for _member in self.members:
-            if _member.id == member.id:
-                self.members.remove(_member)
+        if res.status_code == 200:
+            for _member in self.members:
+                if _member.id == member.id:
+                    self.members.remove(_member)
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def set_owner(self, member: User) -> None:
         self.owner = member

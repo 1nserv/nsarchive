@@ -22,11 +22,36 @@ class JusticeInterface(Interface):
             headers = self.default_headers,
         )
 
-        if res.status_code != 200:
-            res.raise_for_status()
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
 
         report = Report(id)
-        report._load(res.json(), f"{self.url}/justice/reports/{id}", self.default_headers)
+        report._load(_data, f"{self.url}/justice/reports/{id}", self.default_headers)
 
         return report
 
@@ -41,13 +66,39 @@ class JusticeInterface(Interface):
             json = payload
         )
 
-        if res.status_code != 200:
-            res.raise_for_status()
 
-        report = Report(NSID(res.json()['id']))
-        report._load(res.json(), f"{self.url}/justice/reports/{report.id}", self.default_headers)
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
+
+        report = Report(NSID(_data['id']))
+        report._load(_data, f"{self.url}/justice/reports/{report.id}", self.default_headers)
 
         return report
+
 
     """
     PROCÈS
@@ -59,11 +110,36 @@ class JusticeInterface(Interface):
             headers = self.default_headers,
         )
 
-        if res.status_code != 200:
-            res.raise_for_status()
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
 
         lawsuit = Lawsuit(id)
-        lawsuit._load(res.json(), f"{self.url}/justice/lawsuits/{id}", self.default_headers)
+        lawsuit._load(_data, f"{self.url}/justice/lawsuits/{id}", self.default_headers)
 
         return lawsuit
 
@@ -77,13 +153,39 @@ class JusticeInterface(Interface):
             json = payload
         )
 
-        if res.status_code != 200:
-            res.raise_for_status()
 
-        lawsuit = Lawsuit(NSID(res.json()['id']))
-        lawsuit._load(res.json(), f"{self.url}/justice/lawsuits/{report.id}", self.default_headers)
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
+
+        lawsuit = Lawsuit(NSID(_data['id']))
+        lawsuit._load(_data, f"{self.url}/justice/lawsuits/{report.id}", self.default_headers)
 
         return lawsuit
+
 
     """
     SANCTIONS
@@ -95,11 +197,36 @@ class JusticeInterface(Interface):
             headers = self.default_headers,
         )
 
-        if res.status_code != 200:
-            res.raise_for_status()
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
 
         sanction = Sanction(id)
-        sanction._load(res.json(), f"{self.url}/justice/sanctions/{id}", self.default_headers)
+        sanction._load(_data, f"{self.url}/justice/sanctions/{id}", self.default_headers)
 
         return sanction
 
@@ -113,10 +240,35 @@ class JusticeInterface(Interface):
             json = payload
         )
 
-        if res.status_code != 200:
-            res.raise_for_status()
 
-        sanction = Sanction(NSID(res.json()['id']))
-        sanction._load(res.json(), f"{self.url}/justice/sanctions/{sanction.id}", self.default_headers)
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
+
+        sanction = Sanction(NSID(_data['id']))
+        sanction._load(_data, f"{self.url}/justice/sanctions/{sanction.id}", self.default_headers)
 
         return sanction

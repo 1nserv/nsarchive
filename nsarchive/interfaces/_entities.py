@@ -1,6 +1,8 @@
 from ..models.base import *
 from ..models.entities import *
 
+from .. import errors
+
 from ..models import entities # Pour les default_headers
 
 class EntityInterface(Interface):
@@ -41,20 +43,35 @@ class EntityInterface(Interface):
         id = NSID(id)
 
         if _class == "user":
-            _data = self._get_by_ID('individuals', id)
+            res = requests.get(f"{self.url}/model/individuals/{id}", headers = self.default_headers, json = {})
         elif _class == "group":
-            _data = self._get_by_ID('organizations', id)
+            res = requests.get(f"{self.url}/model/organisations/{id}", headers = self.default_headers, json = {})
         else:
-            _data = self._get_by_ID('entities', id)
+            res = requests.get(f"{self.url}/model/entities/{id}", headers = self.default_headers, json = {})
 
-        if _data is None: # ID inexistant chez les entités
-            return None
+
+        # ERREURS
+
+        if res.status_code == 404:
+            return
+
+        if 500 <= res.status_code < 600:
+            res.raise_for_status()
+
+        if not 200 <= res.status_code < 300:
+            print(res.json()['message'])
+            return
+
+
+        # TRAITEMENT
+
+        _data = res.json()
 
         if _data['_class'] == 'individuals':
             entity = User(id)
         elif _data['_class'] == 'organizations':
             entity = Organization(id)
-        else: 
+        else:
             entity = Entity(id)
 
         entity._load(_data, self.url, self.default_headers)
@@ -82,11 +99,36 @@ class EntityInterface(Interface):
         else:
             return
 
-        self._put_in_db(
-            f"/new_model/{_class}?id={id}&name={name}&position={position}&zone={zone}",
+        res = requests.put(
+            f"{self.url}/new_model/{_class}?id={id}&name={name}&position={position}&zone={zone}",
             headers = self.default_headers,
-            use_PUT = True
+            json = {}
         )
+
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+
+        # TRAITEMENT
 
         entity = self.get_entity(id)
 
@@ -112,8 +154,27 @@ class EntityInterface(Interface):
 
         res = requests.post(f"{entity._url}/delete", headers = self.default_headers)
 
-        if res.status_code != 200:
-            res.raise_for_status()
+        if 200 <= res.status_code < 300:
+            return
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
 
     def fetch_entities(self, **query: typing.Any) -> list[ Entity | User | Organization ]:
         """
@@ -172,10 +233,35 @@ class EntityInterface(Interface):
         - `.Position`
         """
 
-        _data = self._get_by_ID('positions', id)
+        res = requests.get(f"{self.url}/model/positions/{id}", headers = self.default_headers)
 
-        if _data is None:
-            return None
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
 
         position = Position(id)
         position._load(_data, self.url, self.default_headers)

@@ -4,6 +4,7 @@ import requests
 
 from .base import NSID
 from .republic import Vote
+from .. import errors
 
 class Party:
     def __init__(self, org_id: NSID):
@@ -65,11 +66,49 @@ class Election:
     def submit_candidacy(self):
         res = requests.put(f"{self._url}/submit")
 
-        if res.status_code != 200:
-            res.raise_for_status()
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def cancel_candidacy(self):
         res = requests.put(f"{self._url}/cancel_candidacy")
 
-        if res.status_code != 200:
-            res.raise_for_status()
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])

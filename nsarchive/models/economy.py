@@ -3,6 +3,7 @@ import time
 import urllib
 
 from .base import NSID
+from .. import errors
 
 
 class BankAccount:
@@ -64,8 +65,27 @@ class BankAccount:
 
         if res.status_code == 200:
             self.frozen = frozen
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def flag(self, flagged: bool = True, reason: str = None) -> None:
         res = requests.post(f"{self._url}/flag?flagged={str(flagged).lower()}", headers = self._headers, json = {
@@ -74,8 +94,27 @@ class BankAccount:
 
         if res.status_code == 200:
             self.flagged = flagged
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def debit(self, amount: int, reason: str = None, target: NSID = None, loan: NSID = None, digicode: str = None) -> None:
         _target_query = f"&target={target}"
@@ -88,8 +127,27 @@ class BankAccount:
 
         if res.status_code == 200:
             self.amount -= amount
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def deposit(self, amount: int, reason: str = None) -> None:
         res = requests.post(f"{self._url}/deposit?amount={amount}", headers = self._headers, json = {
@@ -98,5 +156,24 @@ class BankAccount:
 
         if res.status_code == 200:
             self.amount -= amount
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])

@@ -2,7 +2,7 @@ import json
 import requests
 import typing
 
-from .. import utils
+from .. import utils, errors
 
 VERSION = 300
 
@@ -99,29 +99,35 @@ class Interface:
             "password": password
         })
 
-        if res.status_code == 200:
-            return res.json()["token"]
-        elif res.status_code in (401, 403):
-            raise PermissionError(res.json()['message'])
-        else:
-            raise Exception(f"Error {res.status_code}: {res.json()['message']}")
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+
+        return _data['token']
 
     def _get_item(self, endpoint: str, body: dict = None, headers: dict = None) -> dict:
         """
-        Récupère des données JSON depuis l'API
-
-        ## Paramètres
-        endpoint: `str`:
-            Endpoint de l'URL
-        headers: `dict` (optional)
-            Headers à envoyer
-        body: `dict` (optional)
-            Données à envoyer
-
-        ## Renvoie
-        - `list` de tous les élements correspondants
-        - `None` si aucune donnée n'est trouvée
+        Obsolète.
         """
+
+        utils.warn("La fonction 'Interface._get_item' est obsolète et sera supprimée dans la version 3.0.0 de NSArchive.")
 
         if not headers:
             headers = self.default_headers
@@ -144,16 +150,11 @@ class Interface:
 
     def _put_in_db(self, endpoint: str, body: dict = {}, headers: dict = None, use_PUT: bool = False) -> None:
         """
-        Publie des données JSON dans une table nation-db.
-
-        ## Paramètres
-        endpoint: `str`
-            Endpoint de l'URL
-        body: `dict`
-            Données à envoyer
-        headers: `dict` (optionnel)
-            Headers à envoyer
+        Obsolète
         """
+
+        utils.warn("La fonction 'Interface._put_in_db' est obsolète et sera supprimée dans la version 3.0.0 de NSArchive.")
+
 
         if not headers:
             headers = headers
@@ -170,14 +171,10 @@ class Interface:
 
     def _delete(self, _class: str, ids: list[NSID]) -> None:
         """
-        Supprime des données JSON dans une table nation-db.
-
-        ## Paramètres
-        _class: `str`
-            Classe des entités à supprimer
-        ids: `list[NSID]`
-            ID des entités à supprimer
+        Obsolète
         """
+
+        utils.warn("La fonction 'Interface._delete' est obsolète et sera supprimée dans la version 3.0.0 de NSArchive.")
 
         res = requests.post(f"{self.url}/delete_{_class}", json = { "ids": ids })
 
@@ -188,21 +185,33 @@ class Interface:
         else:
             raise Exception(f"Error {res.status_code}: {res.json()['message']}")
 
-    def _delete_by_ID(self, _class: str, id: NSID):
-        utils.warn("Method '_delete_by_id' is deprecated. Use '_delete' instead.")
-        self._delete(_class, id)
-
     def fetch(self, _class: str, **query: typing.Any) -> list:
         res = requests.get(f"{self.url}/fetch/{_class}", params = query)
 
-        if res.status_code == 200:
-            matches = res.json()
-        elif res.status_code in (401, 403):
-            matches = []
-        else:
-            res.raise_for_status()
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
 
-        return matches
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return []
+
+
+        return res.json()
 
 
     def _upload_file(self, bucket: str, name: str, data: bytes, overwrite: bool = False, headers: dict = None) -> dict:
@@ -239,14 +248,28 @@ class Interface:
 
         res = requests.put(f"{self.url}/upload_file/{bucket}", headers = headers, json = body, files = [ file ])
 
-        if res.status_code == 200:
-            return res.json()
-        elif res.status_code in (403, 401):
-            raise PermissionError(res.json()['message'])
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
         elif res.status_code == 409:
-            raise FileExistsError(res.json()['message'])
-        else:
-            raise Exception(f"Error {res.status_code}: {res.json()['message']}") 
+            raise errors.globals.ConflictError(_data['message'])
 
     def _download_from_storage(self, bucket: str, path: str, headers: dict = None) -> bytes:
         """
@@ -267,9 +290,27 @@ class Interface:
 
         res = requests.get(f"{self.url}/drive/{bucket}/{path}", headers = headers)
 
-        if res.status_code == 200:
-            return res.json()
-        elif res.status_code in (403, 401):
-            raise PermissionError(res.json()['message'])
-        else:
-            raise Exception(f"Error {res.status_code}: {res.json()['message']}") 
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+        return _data

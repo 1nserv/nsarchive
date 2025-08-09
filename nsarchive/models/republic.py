@@ -4,6 +4,8 @@ import time
 
 from .base import NSID
 
+from .. import errors
+
 # Votes
 
 class VoteOption:
@@ -98,8 +100,27 @@ class Vote:
 
         if res.status_code == 200:
             self.get(id).count += 1
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
     def close(self):
         """
@@ -110,8 +131,27 @@ class Vote:
 
         if res.status_code == 200:
             self.endDate = round(time.time())
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
 class LawsuitVote(Vote):
     """

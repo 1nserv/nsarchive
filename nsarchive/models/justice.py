@@ -3,6 +3,8 @@ import time
 
 from .base import NSID
 
+from .. import errors
+
 class Report:
     def __init__(self, id: NSID):
         self._url: str = ""
@@ -46,8 +48,27 @@ class Report:
 
         if res.status_code == 200:
             self.status = status
-        else:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
 class Sanction:
     def __init__(self, id: NSID):
