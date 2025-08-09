@@ -12,27 +12,25 @@ class NSID(str):
 
     ID unique et universel pour l'ensemble des entités et évènements. Il prend les `int`, les `str` et les autres instances `NSID` pour les convertir en un identifiant hexadécimal.
     """
+
     unknown = "0"
+
     admin = "1"
     gov = "2"
     court = "3"
     assembly = "4"
-    office = "5"
-    hexabank = "6"
-    archives = "7"
 
-    maintenance_com = "101"
-    audiovisual_dept = "102"
-    interior_dept = "103"
-    justice_dept = "104"
-    egalitary_com = "105"
-    antifraud_dept = "106"
+    tresor_public = "A"
+    office = "B"
+    hexabank = "C"
 
     def __new__(cls, value):
         if type(value) == int:
             value = hex(value)
         elif type(value) in (str, NSID):
             value = hex(int(value, 16))
+        elif value is None:
+            value = hex(int(cls.unknown, 16))
         else:
             raise TypeError(f"<{value}> is not NSID serializable")
 
