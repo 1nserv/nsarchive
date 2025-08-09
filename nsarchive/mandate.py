@@ -5,7 +5,7 @@ EPOCH = 1577833200 # 1er Janvier 2020
 PATIENTAGE_DATE = 1725141600 # 1er Septembre 2024
 OPEN_DATE = 1756677600 # 1er Septembre 2025
 
-MANDATE_DURATION = 2419200
+MANDATE_DURATION = 2419200 # 28 jours
 
 def get_cycle(ts: int = round(time.time())):
     if EPOCH <= ts < PATIENTAGE_DATE:
@@ -48,3 +48,22 @@ def get_phase(ts: int = round(time.time())) -> str:
 
     else:
         raise ValueError(f"Idk what happened but it seems that {day} is greater than 55...")
+
+
+def next_election(type: str = 'partial') -> int:
+    if get_cycle() == 1:
+        return PATIENTAGE_DATE
+    elif get_cycle() == 2:
+        return OPEN_DATE
+    else:
+        if type == 'partial':
+            ts = OPEN_DATE + get_cycle() * MANDATE_DURATION
+        elif type == 'full':
+            ts = OPEN_DATE + get_cycle() * MANDATE_DURATION
+
+            if get_cycle() % 2 == 1:
+                ts += 28 * 86400
+
+        ts = round(ts / 86400) * 86400
+
+        return ts
