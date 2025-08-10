@@ -1,7 +1,7 @@
 """
 nsarchive - API-wrapper pour récupérer des données liées à Nation.
 
-Version: 3.0.0-beta.1
+Version: 3.0.0-beta.2
 Date de sortie: 2025-08-06
 License: GPL-3.0
 Auteur : happex <110610727+okayhappex@users.noreply.github.com>
@@ -23,6 +23,8 @@ from .models.state import *
 from .models.justice import *
 
 from .models.scale import *
+
+from . import errors
 
 # Import des interfaces
 from .models.base import Interface
