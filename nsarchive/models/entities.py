@@ -1,12 +1,10 @@
 import requests
 import time
 import typing
-import urllib
-import warnings
 
 from .base import NSID
 
-from .. import utils, errors
+from .. import errors
 
 class Permission:
     def __init__(self, initial: str = "----"):
@@ -90,7 +88,7 @@ class Position:
         return self.id
 
     def update_permisions(self, **permissions: str):
-        query = "&".join(f"{k}={ urllib.parse.quote(v) }" for k, v in permissions.items())
+        query = "&".join(f"{k}={v}" for k, v in permissions.items())
 
         res = requests.post(f"{self._url}/update_permissions?{query}", headers = self._headers)
 
@@ -204,8 +202,11 @@ class Entity:
         elif res.status_code == 404:
             raise errors.globals.NotFoundError(_data['message'])
 
-    def set_position(self, position: Position) -> None:
-        res = requests.post(f"{self._url}/change_position?position={position.id}", headers = self._headers)
+    def set_position(self, position: str | Position) -> None:
+        if isinstance(position, Position):
+            position: str = position.id
+
+        res = requests.post(f"{self._url}/change_position?position={position}", headers = self._headers)
 
         if res.status_code == 200:
             self.position = position
@@ -226,7 +227,7 @@ class Entity:
             "type": _class
         }
 
-        query = "&".join(f"{k}={ urllib.parse.quote(v) }" for k, v in params.items())
+        query = "&".join(f"{k}={v}" for k, v in params.items())
 
         res = requests.post(f"{self._url}/add_link?{query}", headers = self._headers)
 
@@ -255,7 +256,7 @@ class Entity:
             raise errors.globals.NotFoundError(_data['message'])
 
     def unlink(self, key: str) -> None:
-        res = requests.post(f"{self._url}/remove_link?link={urllib.parse.quote(key)}", headers = self._headers)
+        res = requests.post(f"{self._url}/remove_link?link={key}", headers = self._headers)
 
         if res.status_code == 200:
             del self.additional[key]
@@ -426,32 +427,85 @@ class User(Entity):
         elif res.status_code == 404:
             raise errors.globals.NotFoundError(_data['message'])
 
-class GroupPermissions:
-    """
-    Permissions d'un membre à l'échelle d'un groupe
-    """
-
-    def __init__(self) -> None:
-        self.manage_organization = False # Renommer l'organisation, changer le logo
-        self.manage_roles = False # Changer les rôles des membres
-        self.manage_members = False # Virer quelqu'un d'une entreprise, l'y inviter
-
-    def edit(self, **permissions: bool) -> None:
-        for perm in permissions.values():
-            self.__setattr__(*perm)
-
 class GroupMember:
     """
     Membre au sein d'une entité collective
 
     ## Attributs
-    - permissions: `.GroupPermissions`\n
-        Permissions du membre au sein du groupe
+    - level: `int`\n
+        Niveau d'accréditation d'un membre au sein d'un groupe
+    - manager: `bool`\n
+        Permission ou non de modifier le groupe
     """
 
     def __init__(self, id: NSID) -> None:
+        self._group_url: str
+        self._headers: dict
+
         self.id = id
-        self.permissions: GroupPermissions = GroupPermissions()
+        self.level: int = 1 # Plus un level est haut, plus il a de pouvoir sur les autres membres
+        self.manager: bool = False
+
+    def _load(self, _data: dict, group_url: str, headers: dict):
+        self._group_url = group_url
+        self._headers = headers
+
+        self.level = _data['level']
+        self.manager = _data['manager']
+
+    def edit(self, level: int = None, manager: bool = None) -> None:
+        params = {
+            "member": self.id
+        }
+
+        if level is not None: params['level'] = level
+        if manager is not None: params['manager'] = str(manager).lower()
+
+        res = requests.post(f"{self._group_url}/edit_member", params = params, headers = self._headers)
+
+        if res.status_code == 200:
+            if level:
+                self.level = level
+            else:
+                return
+
+            if manager is not None:
+                self.manager = manager
+
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
+
+    def promote(self, level: int = None):
+        if level is None:
+            level = self.level + 1
+
+        self.edit(level = level)
+
+    def demote(self, level: int = None):
+        if level is None:
+            level = self.level - 1
+
+        self.edit(level = level)
+
 
 class Organization(Entity):
     """
@@ -461,14 +515,12 @@ class Organization(Entity):
     - Tous les attributs de la classe `.Entity`
     - owner: `.Entity`\n
         Utilisateur ou entreprise propriétaire de l'entité collective
-    - avatar: `bytes`\n
-        Avatar/logo de l'entité collective
-    - certifications: `dict[str, int]`\n
+    - avatar_url: `str`\n
+        Url du logo de l'entité collective
+    - certifications: `dict[str, Any]`\n
         Liste des certifications et de leur date d'ajout
     - members: `list[.GroupMember]`\n
         Liste des membres de l'entreprise
-    - parts: `list[.Share]`\n
-        Liste des actions émises par l'entreprise
     """
 
     def __init__(self, id: NSID) -> None:
@@ -478,10 +530,11 @@ class Organization(Entity):
         self.avatar_url: str = self._url + '/avatar'
 
         self.certifications: dict = {}
-        self.members: list[GroupMember] = []
+        self.members: dict[NSID, GroupMember] = {}
 
     def _load(self, _data: dict, url: str, headers: dict):
         self._url = url + '/model/organizations/' + _data['id']
+        self.avatar_url = url + '/avatar'
         self._headers = headers
 
         self.id = NSID(_data['id'])
@@ -507,11 +560,11 @@ class Organization(Entity):
 
         self.owner._load(_owner, url, headers)
 
-        for _member in _data['members']:
-            member = GroupMember(_member['id'])
-            member.permission_level = _member['level']
+        for _id, _member in _data['members'].items():
+            member = GroupMember(_id)
+            member._load(_member, self._url, headers)
 
-            self.members.append(member)
+            self.members[member.id] = member
 
         self.certifications = _data['certifications']
 
@@ -572,19 +625,19 @@ class Organization(Entity):
         elif res.status_code == 404:
             raise errors.globals.NotFoundError(_data['message'])
 
-    def add_member(self, member: NSID, permissions: GroupPermissions = GroupPermissions()) -> None:
+    def add_member(self, member: NSID) -> GroupMember:
         if not isinstance(member, NSID):
             raise TypeError("L'entrée membre doit être de type NSID")
 
-        res = requests.post(f"{self._url}/add_member?id={member}", headers = self._headers, json = {
-            "permissions": permissions.__dict__
-        })
+        res = requests.post(f"{self._url}/add_member?member={member}", headers = self._headers, json = {})
 
         if res.status_code == 200:
             member = GroupMember(member)
-            member.permissions = permissions
+            member._group_url = self._url
+            member._headers = self._headers
 
-            self.members.append(member)
+            self.members[member.id] = member
+            return member
         elif 500 <= res.status_code < 600:
             raise errors.globals.ServerDownError()
 
@@ -608,46 +661,18 @@ class Organization(Entity):
             raise errors.globals.NotFoundError(_data['message'])
 
     def remove_member(self, member: GroupMember) -> None:
-        res = requests.post(f"{self._url}/remove_member?id={member.id}", headers = self._headers)
+        member.demote(level = 0)
 
-        if res.status_code == 200:
-            for _member in self.members:
-                if _member.id == member.id:
-                    self.members.remove(_member)
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
+        del self.members[member.id]
 
     def set_owner(self, member: User) -> None:
         self.owner = member
 
     def get_member(self, id: NSID) -> GroupMember:
-        for member in self.members:
-            if member.id == id:
-                return member
-        else:
-            return
+        return self.members.get(id)
 
     def get_members_by_attr(self, attribute: str = "id") -> list[str]:
-        return [ member.__getattribute__(attribute) for member in self.members ]
+        return [ member.__getattribute__(attribute) for member in self.members.values() ]
 
     def save_avatar(self, data: bytes = None):
         pass
