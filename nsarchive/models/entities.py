@@ -400,7 +400,7 @@ class User(Entity):
                 if grp is None: continue
 
                 group = Organization(grp["id"])
-                group._load(grp, self._url, self._headers)
+                group._load(grp, self._url.rstrip(f"/models/{self.id}"), self._headers)
 
                 groups.append(group)
 
