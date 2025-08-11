@@ -81,7 +81,7 @@ class Vote:
         self.options = {}
 
         for _opt_id, opt in _data['options'].items():
-            option = VoteOption(*tuple(opt.values()))
+            option = VoteOption(opt['title'], opt['count'])
 
             self.options[_opt_id] = option
 
