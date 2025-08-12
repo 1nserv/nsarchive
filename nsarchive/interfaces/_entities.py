@@ -52,10 +52,7 @@ class EntityInterface(Interface):
 
         # ERREURS
 
-        if res.status_code == 404:
-            return
-
-        elif 500 <= res.status_code < 600:
+        if 500 <= res.status_code < 600:
             raise errors.globals.ServerDownError()
 
         _data = res.json()
