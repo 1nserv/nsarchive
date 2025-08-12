@@ -328,7 +328,7 @@ class StateInterface(Interface):
             raise errors.globals.PermissionError(_data['message'])
 
         elif res.status_code == 404:
-            return
+            raise errors.globals.NotFoundError(_data['message'])
 
 
         # TRAITEMENT

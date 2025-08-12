@@ -20,6 +20,10 @@ class PermissionError(Exception): # 403
     def __init__(self, *args):
         super().__init__(*args)
 
+class NotTheOwnerError(PermissionError): # 403
+	def __init__(self, *args):
+		super().__init__(*args)
+
 class NotFoundError(Exception): # 404
     def __init__(self, *args):
         super().__init__(*args)
