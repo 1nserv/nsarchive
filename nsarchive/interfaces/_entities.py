@@ -55,17 +55,35 @@ class EntityInterface(Interface):
         if res.status_code == 404:
             return
 
-        if 500 <= res.status_code < 600:
-            res.raise_for_status()
+        elif 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
 
-        if not 200 <= res.status_code < 300:
-            print(res.json()['message'])
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+            else:
+                res.raise_for_status()
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
             return
+
+        elif not 200 <= res.status_code < 300:
+            res.raise_for_status()
 
 
         # TRAITEMENT
-
-        _data = res.json()
 
         if _data['_class'] == 'individuals':
             entity = User(id)
