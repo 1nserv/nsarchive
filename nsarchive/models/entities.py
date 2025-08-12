@@ -146,7 +146,8 @@ class Entity:
     """
 
     def __init__(self, id: NSID) -> None:
-        self._url: str = "" # URL de l'entité pour une requête
+        self._base_url: str = ''
+        self._url: str = '' # URL de l'entité pour une requête
         self._headers: dict = {}
 
         self.id: NSID = NSID(id) # ID hexadécimal de l'entité
@@ -157,6 +158,7 @@ class Entity:
         self.additional: dict = {}
 
     def _load(self, _data: dict, url: str, headers: dict):
+        self._base_url = url
         self._url = url + '/model/' + _data['_class'] + '/' + _data['id']
         self._headers = headers
 
@@ -304,6 +306,7 @@ class User(Entity):
         self.votes: list[NSID] = []
 
     def _load(self, _data: dict, url: str, headers: dict):
+        self._base_url = url
         self._url = url + '/model/individuals/' + _data['id']
         self._headers = headers
 
@@ -400,7 +403,7 @@ class User(Entity):
                 if grp is None: continue
 
                 group = Organization(grp["id"])
-                group._load(grp, self._url.rstrip(f"/models/{self.id}"), self._headers)
+                group._load(grp, self._base_url, self._headers)
 
                 groups.append(group)
 
@@ -533,8 +536,9 @@ class Organization(Entity):
         self.members: dict[NSID, GroupMember] = {}
 
     def _load(self, _data: dict, url: str, headers: dict):
+        self._base_url = url
         self._url = url + '/model/organizations/' + _data['id']
-        self.avatar_url = url + '/avatar'
+        self.avatar_url = self._url + '/avatar'
         self._headers = headers
 
         self.id = NSID(_data['id'])
