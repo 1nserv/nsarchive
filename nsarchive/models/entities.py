@@ -1,10 +1,9 @@
-import requests
 import time
 import typing
 
 from .base import NSID
 
-from .. import errors
+from .. import database as db
 
 class Permission:
     def __init__(self, initial: str = "----"):
@@ -74,8 +73,7 @@ class Position:
     """
 
     def __init__(self, id: str = 'member') -> None:
-        self._url: str = ""
-        self._headers: dict = {}
+        self._path: str = ""
 
         self.id = id
         self.name: str = "Membre"
@@ -87,44 +85,29 @@ class Position:
     def __repr__(self):
         return self.id
 
-    def update_permisions(self, **permissions: str):
-        query = "&".join(f"{k}={v}" for k, v in permissions.items())
+    def __eq__(self, value):
+        return 0        
 
-        res = requests.post(f"{self._url}/update_permissions?{query}", headers = self._headers)
-
-        if res.status_code == 200:
-            self.permissions.merge(permissions)
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
-
-    def _load(self, _data: dict, url: str, headers: dict) -> None:
-        self._url = url + '/model/positions/' + _data['id']
-        self._headers = headers
+    def _load(self, _data: dict, path: str) -> None:
+        self._path = path
 
         self.id = _data['id']
         self.name = _data['name']
         self.is_global_scope = _data['is_global_scope']
         self.permissions.merge(_data['permissions'])
         self.manager_permissions.merge(_data['manager_permissions'])
+
+    def _to_dict(self) -> dict:
+        return {
+            'id': self.id,
+            'name': self.name,
+            'is_global_scope': self.is_global_scope,
+            'permissions': {}, # TODO: issue #2
+            'manager_permissions': {} # TODO: issue #2
+        }
+
+    def save(self):
+        db.put_item(self._path, 'positions', self._to_dict(), True)
 
 class Entity:
     """
@@ -137,8 +120,6 @@ class Entity:
         Nom d'usage
     - register_date: `int`\n
         Date d'enregistrement
-    - zone: `int`:\n
-        Zone civile
     - position: `.Position`\n
         Position civile
     - additional: `dict`\n
@@ -146,27 +127,21 @@ class Entity:
     """
 
     def __init__(self, id: NSID) -> None:
-        self._base_url: str = ''
-        self._url: str = '' # URL de l'entité pour une requête
-        self._headers: dict = {}
+        self._path: str = '' # Chemin de la db
 
         self.id: NSID = NSID(id) # ID hexadécimal de l'entité
         self.name: str = "Entité Inconnue"
         self.register_date: int = 0
-        self.zone: int = 20 # 10 = Serveur test, 20 = Serveur principal, 30 = Serveur de patientage
         self.position: Position = Position()
         self.additional: dict = {}
 
-    def _load(self, _data: dict, url: str, headers: dict):
-        self._base_url = url
-        self._url = url + '/model/' + _data['_class'] + '/' + _data['id']
-        self._headers = headers
+    def _load(self, _data: dict, path: str):
+        self._path = path
 
         self.id = NSID(_data['id'])
         self.name = _data['name']
         self.register_date = _data['register_date']
-        self.zone = _data['zone']
-        self.position._load(_data['position'], url, headers)
+        self.position._load(_data['position'], path)
 
         for  key, value in _data.get('additional', {}).items():
             if isinstance(value, str) and value.startswith('\n'):
@@ -174,115 +149,24 @@ class Entity:
             else:
                 self.additional[key] = value
 
-    def set_name(self, new_name: str) -> None:
-        if len(new_name) > 32:
-            raise ValueError(f"Name length mustn't exceed 32 characters.")
+    def save(self):
+        pass
 
-        res = requests.post(f"{self._url}/rename?name={new_name}", headers = self._headers)
+    def set_name(self, name: str) -> None:
+        self.name = name
+        self.save()
 
-        if res.status_code == 200:
-            self.name = new_name
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
-
-    def set_position(self, position: str | Position) -> None:
-        if isinstance(position, Position):
-            position: str = position.id
-
-        res = requests.post(f"{self._url}/change_position?position={position}", headers = self._headers)
-
-        if res.status_code == 200:
-            self.position = position
-        else:
-            res.raise_for_status()
+    def set_position(self, position: Position) -> None:
+        self.position = position
+        self.save()
 
     def add_link(self, key: str, value: str | int) -> None:
-        if isinstance(value, str):
-            _class = "string"
-        elif isinstance(value, int):
-            _class = "integer"
-        else:
-            raise TypeError("Only strings and integers can be recorded as an additional link")
-
-        params = {
-            "link": key,
-            "value": value,
-            "type": _class
-        }
-
-        query = "&".join(f"{k}={v}" for k, v in params.items())
-
-        res = requests.post(f"{self._url}/add_link?{query}", headers = self._headers)
-
-        if res.status_code == 200:
-            self.additional[key] = value
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
+        self.additional[key] = value
+        self.save()
 
     def unlink(self, key: str) -> None:
-        res = requests.post(f"{self._url}/remove_link?link={key}", headers = self._headers)
-
-        if res.status_code == 200:
-            del self.additional[key]
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
+        del self.additional[key]
+        self.save()
 
 class User(Entity):
     """
@@ -305,16 +189,13 @@ class User(Entity):
         self.boosts: dict[str, int] = {}
         self.votes: list[NSID] = []
 
-    def _load(self, _data: dict, url: str, headers: dict):
-        self._base_url = url
-        self._url = url + '/model/individuals/' + _data['id']
-        self._headers = headers
+    def _load(self, _data: dict, path: str):
+        self._path = path
 
         self.id = NSID(_data['id'])
         self.name = _data['name']
         self.register_date = _data['register_date']
-        self.zone = _data['zone']
-        self.position._load(_data['position'], url, headers)
+        self.position._load(_data['position'], path)
 
         for  key, value in _data.get('additional', {}).items():
             if isinstance(value, str) and value.startswith('\n'):
@@ -325,7 +206,22 @@ class User(Entity):
         self.xp = _data['xp']
         self.boosts = _data['boosts']
 
-        self.votes = [ NSID(vote) for vote in _data['votes'] ]
+        self.votes = [ NSID(vote) for vote in _data['votes'] ] # TODO: issue #4
+
+    def _to_dict(self) -> dict:
+        return {
+            'id': self.id,
+            'name': self.name,
+            'position': self.position.id,
+            'register_date': self.register_date,
+            # 'certifications': {}, | TODO: issue #3
+            'xp': self.xp,
+            'boosts': self.boosts,
+            'additional': self.additional
+        }
+
+    def save(self):
+        db.put_item(self.path, 'individuals', self._to_dict(), True)
 
     def get_level(self) -> None:
         i = 0
@@ -336,99 +232,47 @@ class User(Entity):
 
     def add_xp(self, amount: int) -> None:
         boost = 0 if 0 in self.boosts.values() or amount <= 0 else max(list(self.boosts.values()) + [ 1 ])
-        res = requests.post(f"{self._url}/add_xp?amount={amount * boost}", headers = self._headers)
+        self.xp += amount * boost
 
-        if res.status_code == 200:
-            self.xp += amount * boost
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
+        self.save()
 
     def edit_boost(self, name: str, multiplier: int = -1) -> None:
-        res = requests.post(f"{self._url}/edit_boost?boost={name}&multiplier={multiplier}", headers = self._headers)
+        if multiplier >= 0:
+            self.boosts[name] = multiplier
+        else:
+            del self.boosts[name]
 
-        if res.status_code == 200:
-            if multiplier >= 0:
-                self.boosts[name] = multiplier
-            else:
-                del self.boosts[name]
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
+        self.save()
 
     def get_groups(self) -> list[Entity]:
-        res = requests.get(f"{self._url}/groups", headers = self._headers)
+        res = db.fetch(f"{self._path}:organizations")
 
-        if res.status_code == 200:
-            data = res.json()
-            groups = []
+        data = []
 
-            for grp in data:
-                if grp is None: continue
+        for grp in res:
+            if grp is None:
+                continue
 
-                group = Organization(grp["id"])
-                group._load(grp, self._base_url, self._headers)
+            if grp['owner_id'] == str(self.id):
+                data.append(grp)
+                continue
 
-                groups.append(group)
+            if str(self.id) in grp['members'].keys():
+                data.append(grp)
+                continue
 
-            return groups
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
+        groups = []
 
-        _data = res.json()
+        for grp in data:
+            if grp is None: continue
 
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
+            group = Organization(grp['id'])
+            group._load(grp, self._path)
 
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
+            groups.append(group)
 
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
+        return groups
 
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
 
 class GroupMember:
     """
@@ -442,60 +286,48 @@ class GroupMember:
     """
 
     def __init__(self, id: NSID) -> None:
-        self._group_url: str
-        self._headers: dict
+        self._path: str = ''
+        self._group_id: NSID = NSID(0x0)
 
         self.id = id
         self.level: int = 1 # Plus un level est haut, plus il a de pouvoir sur les autres membres
         self.manager: bool = False
 
-    def _load(self, _data: dict, group_url: str, headers: dict):
-        self._group_url = group_url
-        self._headers = headers
+    def _load(self, _data: dict, path: str, group: NSID):
+        self._path = path
+        self._group_id = group
 
+        self.id = _data['id']
         self.level = _data['level']
         self.manager = _data['manager']
 
-    def edit(self, level: int = None, manager: bool = None) -> None:
-        params = {
-            "member": self.id
+    def _to_dict(self) -> dict:
+        return {
+            'level': self.level,
+            'manager': self.manager
         }
 
-        if level is not None: params['level'] = level
-        if manager is not None: params['manager'] = str(manager).lower()
+    def save(self):
+        data = db.get_item(self._path, 'organizations', self._group_id)
+        group = data.copy()
+        group['members'] = {}
 
-        res = requests.post(f"{self._group_url}/edit_member", params = params, headers = self._headers)
+        for id, m in data['members'].items():
+            if m['level'] > 0:
+                group['members'][id] = m
 
-        if res.status_code == 200:
-            if level:
-                self.level = level
-            else:
-                return
+        db.put_item(self.path, 'organizations', group, True)
 
-            if manager is not None:
-                self.manager = manager
+    def edit(self, level: int = None, manager: bool = None) -> None:
+        if level:
+            self.level = level
+        else:
+            return
 
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
+        if manager is not None:
+            self.manager = manager
 
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
+        self.save()
 
     def promote(self, level: int = None):
         if level is None:
@@ -530,22 +362,18 @@ class Organization(Entity):
         super().__init__(NSID(id))
 
         self.owner: Entity = User(NSID(0x0))
-        self.avatar_url: str = self._url + '/avatar'
+        self.avatar_path: str = ''
 
         self.certifications: dict = {}
         self.members: dict[NSID, GroupMember] = {}
 
-    def _load(self, _data: dict, url: str, headers: dict):
-        self._base_url = url
-        self._url = url + '/model/organizations/' + _data['id']
-        self.avatar_url = self._url + '/avatar'
-        self._headers = headers
+    def _load(self, _data: dict, path: str):
+        self._path = path
 
         self.id = NSID(_data['id'])
         self.name = _data['name']
         self.register_date = _data['register_date']
-        self.zone = _data['zone']
-        self.position._load(_data['position'], url, headers)
+        self.position._load(_data['position'], path)
 
         for  key, value in _data.get('additional', {}).items():
             if isinstance(value, str) and value.startswith('\n'):
@@ -562,115 +390,61 @@ class Organization(Entity):
         else:
             self.owner = Entity(_owner['id'])
 
-        self.owner._load(_owner, url, headers)
+        self.owner._load(_owner, path)
 
         for _id, _member in _data['members'].items():
             member = GroupMember(_id)
-            member._load(_member, self._url, headers)
+            member._load(_member, path, self.id)
 
             self.members[member.id] = member
 
         self.certifications = _data['certifications']
 
+    def _to_dict(self) -> dict:
+        return {
+            'id': self.id,
+            'name': self.name,
+            'position': self.position.id,
+            'register_date': self.register_date,
+            'owner_id': self.owner.id,
+            'members': { id: member._to_dict() for id, member in self.members.items() },
+            'certifications': self.certifications,
+            'additional': self.additional
+        }
+
+    def save(self):
+        db.put_item(self.path, 'organizations', self._to_dict(), True)
+
     def add_certification(self, certification: str, __expires: int = 2419200) -> None:
-        res = requests.post(f"{self._url}/add_certification?name={certification}&duration={__expires}", headers = self._headers)
-
-        if res.status_code == 200:
-            self.certifications[certification] = int(round(time.time()) + __expires)
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
+        self.certifications[certification] = int(round(time.time()) + __expires)
+        self.save()
 
     def has_certification(self, certification: str) -> bool:
         return certification in self.certifications.keys()
 
     def remove_certification(self, certification: str) -> None:
-        res = requests.post(f"{self._url}/remove_certification?name={certification}", headers = self._headers)
-
-        if res.status_code == 200:
-            del self.certifications[certification]
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
+        del self.certifications[certification]
+        self.save()
 
     def add_member(self, member: NSID) -> GroupMember:
         if not isinstance(member, NSID):
             raise TypeError("L'entrée membre doit être de type NSID")
+        
+        member = GroupMember(member)
+        member._group_url = self._url
+        member._headers = self._headers
 
-        res = requests.post(f"{self._url}/add_member?member={member}", headers = self._headers, json = {})
+        self.members[member.id] = member
 
-        if res.status_code == 200:
-            member = GroupMember(member)
-            member._group_url = self._url
-            member._headers = self._headers
-
-            self.members[member.id] = member
-            return member
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
+        self.save()
+        return member
 
     def remove_member(self, member: GroupMember) -> None:
         member.demote(level = 0)
 
-        del self.members[member.id]
-
     def set_owner(self, member: User) -> None:
         self.owner = member
+        self.save()
 
     def get_member(self, id: NSID) -> GroupMember:
         return self.members.get(id)

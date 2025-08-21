@@ -1,14 +1,12 @@
-import requests
 import time
 
 from .base import NSID
 
-from .. import errors
+from .. import database as db
 
 class Report:
     def __init__(self, id: NSID):
-        self._url: str = ""
-        self._headers: dict = {}
+        self._path: str = ''
 
         self.id: NSID = id
         self.author: NSID = NSID('0')
@@ -18,9 +16,8 @@ class Report:
         self.reason: str = None # Raison proposée par le bot
         self.details:str = None # Description des faits
 
-    def _load(self, _data: dict, url: str, headers: str) -> None:
-        self._url = url
-        self._headers = headers
+    def _load(self, _data: dict, path: str) -> None:
+        self._path = path
 
         self.id = NSID(_data['id'])
         self.author = NSID(_data['author'])
@@ -29,6 +26,20 @@ class Report:
         self.status = _data['status']
         self.reason = _data.get('reason', None)
         self.details = _data.get('details', None)
+
+    def _to_dict(self) -> dict:
+        return {
+            'id': str(self.id),
+            'author': str(self.author),
+            'target': str(self.target),
+            'date': self.date,
+            'status': self.status,
+            'reason': self.reason,
+            'details': self.details
+        }
+
+    def save(self):
+        db.put_item(self._path, 'reports', self._to_dict())
 
     def update(self, status: str | int):
         __statuses = [
@@ -40,40 +51,15 @@ class Report:
         if status not in __statuses:
             if isinstance(status, int) and 0 <= status <= 2:
                 status = __statuses[status]
-
             else:
                 raise ValueError(f"Invalid status: {status}. Must be one of {__statuses} or an integer between 0 and 2.")
 
-        res = requests.post(f"{self._url}/update?status={status}", headers = self._headers)
-
-        if res.status_code == 200:
-            self.status = status
-        elif 500 <= res.status_code < 600:
-            raise errors.globals.ServerDownError()
-
-        _data = res.json()
-
-        if res.status_code == 400:
-            if _data['message'] == "MissingParam":
-                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidParam":
-                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
-            elif _data['message'] == "InvalidToken":
-                raise errors.globals.AuthError("Token is not valid.")
-
-        elif res.status_code == 401:
-            raise errors.globals.AuthError(_data['message'])
-
-        elif res.status_code == 403:
-            raise errors.globals.PermissionError(_data['message'])
-
-        elif res.status_code == 404:
-            raise errors.globals.NotFoundError(_data['message'])
+        self.status = __statuses.index(status)
+        self.save()
 
 class Sanction:
     def __init__(self, id: NSID):
-        self._url: str = ""
-        self._headers: dict = {}
+        self._path: str = ''
 
         self.id: NSID = id
         self.target: NSID = NSID('0')
@@ -83,9 +69,8 @@ class Sanction:
         self.title: str = None
         self.lawsuit: NSID = NSID('0')
 
-    def _load(self, _data: dict, url: str, headers: dict) -> None:
-        self._url = url
-        self._headers = headers
+    def _load(self, _data: dict, path: str,) -> None:
+        self._path = path
 
         self.id = NSID(_data['id'])
         self.target = NSID(_data['target'])
@@ -95,10 +80,23 @@ class Sanction:
         self.title = _data['title']
         self.lawsuit = NSID(_data['lawsuit'])
 
+    def _to_dict(self) -> dict:
+        return {
+            'id': str(self.id),
+            'target': str(self.target),
+            'type': self.type,
+            'date': self.date,
+            'duration': self.duration,
+            'title': self.title,
+            'lawsuit': str(self.lawsuit)
+        }
+
+    def save(self):
+        db.put_item(self._path, 'sanctions', self._to_dict())
+
 class Lawsuit:
     def __init__(self, id: NSID):
-        self._url: str = ""
-        self._headers: dict = {}
+        self._path: str = ''
 
         self.id: NSID = id
         self.target: NSID = NSID('0')
@@ -109,12 +107,8 @@ class Lawsuit:
         self.is_private: bool = False
         self.is_open: bool = False
 
-    def _load(self, _data: dict, url: str, headers: dict) -> None:
-        self._url = url
-        self._headers = headers
-
-        self._url = url
-        self._headers = headers
+    def _load(self, _data: dict, path: str) -> None:
+        self._path = path
 
         self.id = NSID(_data['id'])
         self.target = NSID(_data['target'])
@@ -127,3 +121,18 @@ class Lawsuit:
 
         self.is_private = bool(_data.get('private', 0))
         self.is_open = _data.get('status', 0) == 0
+
+    def _to_dict(self) -> dict:
+        return {
+            'id': str(self.id),
+            'target': str(self.target),
+            'judge': str(self.judge),
+            'title': self.title,
+            'date': self.date,
+            'report': self.status,
+            'is_private': self.is_private,
+            'is_open': self.is_open
+        }
+
+    def save(self):
+        db.put_item(self._path, 'reports', self._to_dict())
