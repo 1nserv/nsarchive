@@ -1,6 +1,6 @@
 [tool.poetry]
-name = "nsa-fusion"
-version = "1.0.0"
+name = "nsarchive"
+version = "3.0.0b2"
 description = "API-wrapper pour récupérer des données liées à Nation"
 authors = ["happex <110610727+okayhappex@users.noreply.github.com>"]
 license = "GPL-3.0"
@@ -9,6 +9,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 pillow = "^10.4"
+requests = "^2.31"
 
 [build-system]
 requires = ["poetry-core"]

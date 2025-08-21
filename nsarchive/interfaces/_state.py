@@ -1,12 +1,9 @@
-import random
 import time
 
 from ..models.base import *
+from ..models.republic import *
 from ..models.state import *
 from ..models.scale import *
-
-from .. import database as db
-
 
 class StateInterface(Interface):
     """
@@ -14,13 +11,13 @@ class StateInterface(Interface):
 
     ## Informations
     - Liste des partis enregistrés: `.Party`
-    - Liste des officiers et candidats: `.Candidate`
+    - Liste des élections: `.Election`
+    - Liste des officiers et candidats: `.Officer | .Candidate`
     - Résultats des votes: `.Vote`
     """
 
-    def __init__(self, path: str) -> None:
-        super().__init__(path)
-
+    def __init__(self, url: str, token: str) -> None:
+        super().__init__(url, token)
 
     """
     ---- VOTES ----
@@ -39,92 +36,195 @@ class StateInterface(Interface):
         """
 
         id = NSID(id)
-        data = db.get_item(self.path, 'votes', id)
+        res = requests.get(f"{self.url}/votes/{id}", headers = self.default_headers)
+
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
 
         vote = Vote(id)
-        vote._load(data, self.path)
+        vote._load(_data, url = f"{self.url}/votes/{id}", headers = self.default_headers)
 
         return vote
 
-    def open_vote(
-        self,
-        title: str = None, # Titre du vote
-        author: NSID = 0x0, # ID de l'auteur du vote
-        type: str = 'normal', # Type de vote
-        anonymous: bool = True, # Vote anonyme ou non
-        options: list[dict | str ] = [], # Options du vote
-        start: int = round(time.time()), # Début du vote
-        end: int = None, # Fin du vote
-        min_choices: int = None, # Nombre minimum de choix
-        max_choices: int = None, # Nombre maximum de choix
-        majority: int = 50 # Majorité nécessaire à ce vote
-    ) -> Vote:
+    def open_vote(self, title: str = None, options: list[dict] = [], start: int = None, end: int = None) -> Vote:
+        """
+        Déclenche un vote dans la base de données.
 
+        ## Paramètres
+        - title: `str`\n
+            Titre du vote
+        - options: list[dict]\n
+            Liste des choix disponibles
+        - start: `int` (optionnel)\n
+            Début du vote (timestamp)
+        - end: `int` (optionnel)\n
+            Fin du vote (timestamp)
+        """
 
-        opts: dict = {}
-
-        for opt in options:
-            if isinstance(opt, str) or opt.get('id') is None:
-                _opt_id = NSID(random.randint(100000, 999999))
-                _opt_title = opt.get('title', _opt_id) if isinstance(opt, dict) else opt
-            else:
-                if opt['id'] in opts.keys():
-                    raise KeyError(f"Option with key '{opt['id']}' already exists.")
-                else:
-                    _opt_id = NSID(opt['id'])
-
-            opts[_opt_id] = {
-                'title': _opt_title,
-                'count': 0
-                # 'voters': [] | TODO: issue #4
-            }
-
-        _TYPES = (
-            'normal',
-            'partial',
-            'full',
-            '2pos',
-            '3pos'
-        )
-        
-        if type not in _TYPES:
-            raise ValueError(f"Type '{type}' not recognized.")
-        
-        if min_choices > max_choices:
-            raise ValueError("Minimimum choices must be smaller than maximum choices.")
-        
-        if not 50 <= majority <= 100:
-            raise ValueError(f"Majority must be between 50 and 100 both included, not {majority}")
-        
-        if start - 7200 <= time.time(): # 2h avant le vote pour rajouter des options supplémentaires
-            if min_choices > len(opts) or max_choices > len(opts):
-                pass
-
-
-        data = {
-            'id': NSID(round(time.time() * 1000)),
-            'title': title,
-            'author': NSID(author),
-            'type': type,
-            'anonymous': bool(anonymous),
-            'min_choices': int(min_choices),
-            'max_choices': int(max_choices),
-            'majority': int(majority),
-            'start_date': int(start),
-            'end_date': int(end),
-            'options': opts
-            # 'voters': []
+        payload = {
+            "options": options,
         }
 
-        db.put_item(self.path, 'votes', data)
+        if title:
+            payload['title'] = title
 
-        vote = Vote(data['id'])
-        vote._load(data, self.path)
+        res = requests.put(f"{self.url}/open_vote?a=b{('&start=' + str(start)) if start else ''}{('&end=' + str(end)) if end else ''}", headers = self.default_headers, json = payload)
+
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
+
+        vote = Vote(_data['id'])
+        vote._load(_data, url = f"{self.url}/votes/{_data['id']}", headers = self.default_headers)
 
         return vote
 
     # Aucune possibilité de supprimer un vote
 
+    def get_election(self, id: NSID) -> Election:
+        """
+        Récupère une élection.
+
+        ## Paramètres
+        id: `NSID`\n
+            ID de l'élection.
+
+        ## Renvoie
+        - `.Election`
+        """
+
+        id = NSID(id)
+        res = requests.get(f"{self.url}/elections/{id}", headers = self.default_headers)
+
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
+
+        election = Election(id)
+        election._load(_data, url = f"{self.url}/elections/{id}", headers = self.default_headers)
+
+        return election
+
+    def open_election(self, vote: Vote, start: int = None, full: bool = False) -> Election:
+        """
+        Déclenche une élection dans la base de données.
+
+        ## Paramètres
+        - vote: `.Vote`\n
+            Vote associé
+        - start: `int` (optionnel)\n
+            Date de début du vote (timestamp, dure 4 jours)
+        - full: `bool` (optionnel)\n
+            Choix du type d'élections (True = présidentielles, False = législatives)
+        """
+
+        res = requests.put(f"{self.url}/open_election?vote={vote.id}&type={'full' if full else 'partial'}{('&date=' + str(start)) if start else ''}", headers = self.default_headers, json = {})
+
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            return
+
+
+        # TRAITEMENT
+
+        election = Election(_data['id'])
+        election._load(_data, url = f"{self.url}/elections/{_data['id']}", headers = self.default_headers)
+
+        return election
 
     """
     PARTIS
@@ -143,13 +243,38 @@ class StateInterface(Interface):
         """
 
         id = NSID(id)
-        data = db.get_item(self.path, 'parties', str(id))
+        res = requests.get(f"{self.url}/parties/{id}", headers = self.default_headers)
 
-        if data is None:
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
             return
 
+
+        # TRAITEMENT
+
         party = Party(id)
-        party._load(data, self.path)
+        party._load(_data, url = f"{self.url}/parties/{id}", headers = self.default_headers)
 
         return party
 
@@ -162,25 +287,53 @@ class StateInterface(Interface):
             ID de l'entreprise à laquelle correspond le parti
         - color: `int`\n
             Couleur du parti
-        - motto: `str`\n
+        - motto: `str, optional`\n
             Devise du parti
         - scale: `.Scale`\n
             Résultats du parti au test Politiscales
         """
 
-        data = {
-            'id': id,
-            'color': color,
-            'motto': motto,
-            'scale': scale.__dict__ if isinstance(scale, Scale) else scale
+        payload = {
+            "color": color,
+            "motto": motto,
+            "scale": {}
         }
 
-        db.put_item(self.path, 'parties', data)
+        params = {
+            "candidate": id
+        }
+
+        res = requests.put(f"{self.url}/register_party", headers = self.default_headers, params = params, json = payload)
+
+
+        # ERREURS
+
+        if 500 <= res.status_code < 600:
+            raise errors.globals.ServerDownError()
+
+        _data = res.json()
+
+        if res.status_code == 400:
+            if _data['message'] == "MissingParam":
+                raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidParam":
+                raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+            elif _data['message'] == "InvalidToken":
+                raise errors.globals.AuthError("Token is not valid.")
+
+        elif res.status_code == 401:
+            raise errors.globals.AuthError(_data['message'])
+
+        elif res.status_code == 403:
+            raise errors.globals.PermissionError(_data['message'])
+
+        elif res.status_code == 404:
+            raise errors.globals.NotFoundError(_data['message'])
 
 
         # TRAITEMENT
 
-        party = Party(data['org_id'])
-        party._load(data, self.path)
+        party = Party(_data['org_id'])
+        party._load(_data, url = f"{self.url}/parties/{_data['org_id']}", headers = self.default_headers)
 
         return party

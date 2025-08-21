@@ -1,18 +1,17 @@
-import os
 import time
-import typing
 
 from ..models.base import *
 from ..models.economy import *
 
-from .. import database as db, utils
-
+from ..models import economy # Pour les default_headers
 
 class EconomyInterface(Interface):
 	"""Interface qui vous permettra d'interagir avec les comptes en banque et les transactions économiques."""
 
-	def __init__(self, path: str) -> None:
-		super().__init__(os.path.join(path, 'bank'))
+	def __init__(self, url: str, token: str) -> None:
+		super().__init__(url, token)
+
+		economy.default_headers = self.default_headers
 
 	"""
 	---- COMPTES EN BANQUE ----
@@ -31,21 +30,47 @@ class EconomyInterface(Interface):
 		"""
 
 		id = NSID(id)
-		
-		data = db.get_item(self.path, 'accounts')
+		res = requests.get(f"{self.url}/bank/accounts/{id}", headers = self.default_headers)
 
-		if not data:
+
+		# ERREURS
+
+		if 500 <= res.status_code < 600:
+			raise errors.globals.ServerDownError()
+
+		_data = res.json()
+
+		if res.status_code == 400:
+			if _data['message'] == "MissingParam":
+				raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+			elif _data['message'] == "InvalidParam":
+				raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+			elif _data['message'] == "InvalidToken":
+				raise errors.globals.AuthError("Token is not valid.")
+			else:
+				res.raise_for_status()
+
+		elif res.status_code == 401:
+			raise errors.globals.AuthError(_data['message'])
+
+		elif res.status_code == 403:
+			raise errors.globals.PermissionError(_data['message'])
+
+		elif res.status_code == 404:
 			return
+
+		elif not 200 <= res.status_code < 300:
+			res.raise_for_status()
 
 
 		# TRAITEMENT
 
 		account = BankAccount(id)
-		account._load(data, self.path)
+		account._load(_data, self.url, self.default_headers)
 
 		return account
 
-	def create_account(self, owner: NSID, tag: str = None, flagged: bool = False) -> str:
+	def save_account(self, account: BankAccount) -> str:
 		"""
 		Sauvegarde un compte bancaire dans la base de données.
 
@@ -54,34 +79,53 @@ class EconomyInterface(Interface):
 			Compte à sauvegarder
 		"""
 
-		res = self.get_account(owner)
-
-		if res:
-			id = NSID(round(time.time() * 1000))
-		else:
-			id = owner
-
-		data = {
-			'id': id,
-			'tag': tag,
-			'owner_id': owner, 
-			'frozen': False,
-			'flagged': flagged,
-			'register_date': round(time.time()), 
-			'amount': 0,
-			'income': 0,
-			'digicode': utils.gen_digicode(8)
+		_data = {
+			'id': NSID(account.id),
+			'amount': account.amount,
+			'frozen': account.frozen, 
+			'owner_id': account.owner_id, 
+			'bank': account.bank,
+			'income': account.income
 		}
 
-		db.put_item(self.path, 'accounts', data)
+		res = requests.put(f"{self.url}/bank/register_account?owner={_data['owner_id']}", headers = self.default_headers, json = _data)
+
+
+		# ERREURS
+
+		if 500 <= res.status_code < 600:
+			raise errors.globals.ServerDownError()
+
+		_data = res.json()
+
+		if res.status_code == 400:
+			if _data['message'] == "MissingParam":
+				raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+			elif _data['message'] == "InvalidParam":
+				raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+			elif _data['message'] == "InvalidToken":
+				raise errors.globals.AuthError("Token is not valid.")
+			else:
+				res.raise_for_status()
+
+		elif res.status_code == 401:
+			raise errors.globals.AuthError(_data['message'])
+
+		elif res.status_code == 403:
+			raise errors.globals.PermissionError(_data['message'])
+
+		elif res.status_code == 404:
+			return
+
+		elif not 200 <= res.status_code < 300:
+			res.raise_for_status()
 
 
 		# TRAITEMENT
 
-		account = BankAccount(owner)
-		account._load(data['id'], self.path)
+		account._load(_data['id'], self.url, self.default_headers)
 
-		return account
+		return _data['digicode']
 
 
 	def fetch_accounts(self, **query: typing.Any) -> list[BankAccount]:
@@ -96,20 +140,52 @@ class EconomyInterface(Interface):
 		- `list[.BankAccount]`
 		"""
 
-		res = db.fetch(f"{self.path}:accounts", **query)
+		query = "&".join(f"{k}={v}" for k, v in query.items())
+
+		res = requests.get(f"{self.url}/fetch/accounts?{query}", headers = self.default_headers)
+
+
+		# ERREURS
+
+		if 500 <= res.status_code < 600:
+			raise errors.globals.ServerDownError()
+
+		_data = res.json()
+
+		if res.status_code == 400:
+			if _data['message'] == "MissingParam":
+				raise errors.globals.MissingParamError(f"Missing parameter '{_data['param']}'.")
+			elif _data['message'] == "InvalidParam":
+				raise errors.globals.InvalidParamError(f"Invalid parameter '{_data['param']}'.")
+			elif _data['message'] == "InvalidToken":
+				raise errors.globals.AuthError("Token is not valid.")
+			else:
+				res.raise_for_status()
+
+		elif res.status_code == 401:
+			raise errors.globals.AuthError(_data['message'])
+
+		elif res.status_code == 403:
+			raise errors.globals.PermissionError(_data['message'])
+
+		elif res.status_code == 404:
+			return
+
+		elif not 200 <= res.status_code < 300:
+			res.raise_for_status()
 
 
 		# TRAITEMENT
 
 		accounts = []
 
-		for _acc in res:
+		for _acc in _data:
 			if not _acc: continue
 
 			account = BankAccount(_acc["owner_id"])
 
 			account.id = NSID(_acc['id'])
-			account._load(_acc, self.path)
+			account._load(_acc, self.url, self.default_headers)
 
 			accounts.append(account)
 
